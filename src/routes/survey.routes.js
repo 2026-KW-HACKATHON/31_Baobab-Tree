@@ -4,6 +4,9 @@
 // ==============================================================================
 
 const express = require('express');
+const bcrypt = require('bcryptjs');//추가: 암호화
+const jwt = require('jsonwebtoken');//추가: 토큰 발급
+
 const router = express.Router();
 
 // Prisma ORM 인스턴스 생성 (SQLite 데이터베이스와 통신)
@@ -22,9 +25,19 @@ const prisma = new PrismaClient();
  */
 router.post('/auth/signup', async (req, res, next) => {
   try {
-    const { email, password, name } = req.body;
+    const { name,
+      loginId,
+      password,
+      ageGroup
+     } = req.body;
 
     // 1) 필수 입력 파라미터 검증
+    if (!name || !loginId || !password || !ageGroup) {
+      return res.status(400).json({
+        error: '이름, 아이디, 비밀번호, 나이대는 필수 입력 항목입니다.'
+      });
+    }
+    
     if (!email || !password || !name) {
       return res.status(400).json({ error: '이메일, 비밀번호, 이름은 필수 입력 항목입니다.' });
     }
@@ -35,11 +48,14 @@ router.post('/auth/signup', async (req, res, next) => {
       return res.status(400).json({ error: '이미 가입된 이메일 주소입니다.' });
     }
 
+    // 1. 비밀번호 암호화
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     // 3) DB에 신규 유저 데이터 생성 (비밀번호 원문 저장 - 추후 bcrypt 암호화 권장)
     const user = await prisma.user.create({
       data: {
         email,
-        password,
+        password: hashedPassword,//추가: 암호화 과정 
         name,
         points: 0 // 명세서 기준 초기 포인트 0 설정[cite: 3]
       },
@@ -72,13 +88,26 @@ router.post('/auth/login', async (req, res, next) => {
     const user = await prisma.user.findUnique({ where: { email } });
     
     // 2) 비밀번호 일치 여부 검증
-    if (!user || user.password !== password) {
+    if (!isPasswordValid) {  //수정: 비밀번호 암호화를 변경함으로써 확인 방식 변경
       return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
     }
+
+    //JWT 생성 코드
+    const accessToken = jwt.sign(
+  {
+    userId: user.id,
+    email: user.email
+  },
+  process.env.JWT_SECRET,
+  {
+    expiresIn: '1h'
+  }
+);
 
     // 3) 로그인 성공 응답 (유저 정보 반환)[cite: 3]
     res.json({
       message: '로그인 성공',
+      accessToken,
       user: {
         id: user.id,
         email: user.email,
