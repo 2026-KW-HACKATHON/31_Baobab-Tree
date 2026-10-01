@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
 
                 when (currentScreen) {
 
+                    // 로그인
                     "login" -> {
                         LoginScreen(
                             onSignUpClick = {
@@ -37,10 +38,12 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // 시작 화면
                     "start" -> {
                         SplashScreen()
                     }
 
+                    // 홈
                     "home" -> {
                         HomeScreen(
                             onSurveyClick = { survey ->
@@ -50,7 +53,7 @@ class MainActivity : ComponentActivity() {
                                 currentScreen = "search"
                             },
                             onCreateSurveyClick = {
-                                currentScreen = "create"
+                                currentScreen = "create1"
                             },
                             onMyClick = {
                                 currentScreen = "my"
@@ -58,18 +61,94 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // 검색 결과
                     "search" -> {
-                        Text("검색 화면")
+                        SearchResultsScreen(
+                            onSurveyClick = { survey ->
+                                currentScreen = "detail"
+                            },
+                            onCreateSurveyClick = {
+                                currentScreen = "create1"
+                            },
+                            onMyClick = {
+                                currentScreen = "my"
+                            },
+                            onSearchTermChange = {
+                                // 검색어 변경 처리 필요하면 나중에 추가
+                            }
+                        )
                     }
 
+                    // 설문 상세
                     "detail" -> {
-                        Text("설문 상세 화면")
+                        SurveyDetailScreen(
+                            onParticipateClick = {
+                                currentScreen = "surveyComplete"
+                            }
+                        )
                     }
 
-                    "create" -> {
-                        Text("설문 작성 화면")
+                    // 설문 참여 완료
+                    "surveyComplete" -> {
+                        SurveyCompletionScreen(
+                            onHomeClick = {
+                                currentScreen = "home"
+                            }
+                        )
                     }
 
+                    // 설문 작성 1단계
+                    "create1" -> {
+                        SurveyCreationStepOneScreen(
+                            onBackClick = {
+                                currentScreen = "home"
+                            },
+                            onNextClick = { stepOneData ->
+                                currentScreen = "create2"
+                            }
+                        )
+                    }
+
+                    // 설문 작성 2단계
+                    "create2" -> {
+                        SurveyCreationStepTwoScreen(
+                            onBackClick = {
+                                currentScreen = "create1"
+                            },
+                            onCreatePageClick = {
+                                // 현재는 별도 동작 없음
+                            },
+                            onNextClick = { questions ->
+                                currentScreen = "create3"
+                            }
+                        )
+                    }
+
+                    // 설문 작성 3단계
+                    "create3" -> {
+                        SurveyCreationStepThreeScreen(
+                            onBackClick = {
+                                currentScreen = "create2"
+                            },
+                            onImageAttachClick = {
+                                // 이미지 첨부 기능은 나중에 연결
+                            },
+                            onCompleteClick = { settings ->
+                                currentScreen = "createComplete"
+                            }
+                        )
+                    }
+
+                    // 설문 작성 완료
+                    "createComplete" -> {
+                        SurveyCreationCompleteScreen(
+                            onHomeClick = {
+                                currentScreen = "home"
+                            }
+                        )
+                    }
+
+                    // MY
                     "my" -> {
                         Text("MY 화면")
                     }

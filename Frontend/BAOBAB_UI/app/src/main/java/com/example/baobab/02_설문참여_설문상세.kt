@@ -76,7 +76,7 @@ fun SurveyDetailScreen(
             .background(SurveyDetailBackground)
     ) {
         Image(
-            painter = painterResource(R.drawable.survey_detail_hero),
+            painter = painterResource(R.drawable.ic_launcher_foreground),//임시로 바꿔놓음
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -196,7 +196,7 @@ private fun SurveyMetaRow() {
             .height(70.dp)
     ) {
         Image(
-            painter = painterResource(R.drawable.survey_author_avatar),
+            painter = painterResource(R.drawable.ic_launcher_foreground),//임시로 바꿈
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -425,7 +425,7 @@ private fun RelatedSurveyCard(survey: RelatedSurvey) {
             .background(Color.White)
     ) {
         Image(
-            painter = painterResource(R.drawable.survey_related_card),
+            painter = painterResource(R.drawable.ic_launcher_foreground),//임시
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
