@@ -63,23 +63,6 @@ private data class SearchCategoryOption(
     val label: String
 )
 
-private data class FigmaSearchSurvey(
-    val category: String,
-    val title: String,
-    val author: String,
-    val points: String,
-    val imageRes: Int,
-    val badgeColor: Color,
-    val badgeTextColor: Color,
-    val badgeFontSize: Int = 11
-)
-
-data class SearchResultSurvey(
-    val category: String = "지역·사회",
-    val title: String = "설문 제목",
-    val author: String = "설문 작성자"
-)
-
 private val SearchCategories = listOf(
     SearchCategoryOption("전체"),
     SearchCategoryOption("생활·편의"),
@@ -90,75 +73,23 @@ private val SearchCategories = listOf(
     SearchCategoryOption("건강·의료")
 )
 
-private val FigmaSearchSurveys = listOf(
-    FigmaSearchSurvey(
-        category = "생활·편의",
-        title = "일상 속 플라스틱 제품 사용 실태 조사",
-        author = "자취3년차",
-        points = "500P",
-        imageRes = R.drawable.search_card_01,
-        badgeColor = Color(0xFFF6E2E3),
-        badgeTextColor = Color(0xFF800000)
-    ),
-    FigmaSearchSurvey(
-        category = "생활·편의",
-        title = "플라스틱 빨대 VS 종이빨대 무엇이 불편하신가요?",
-        author = "1일1아아",
-        points = "100P",
-        imageRes = R.drawable.search_card_01,
-        badgeColor = Color(0xFFF6E2E3),
-        badgeTextColor = Color(0xFF800000)
-    ),
-    FigmaSearchSurvey(
-        category = "문화·스포츠",
-        title = "플라스틱 다회용 그릇 재활용 참여 조사",
-        author = "잠실 가고 싶다",
-        points = "100P",
-        imageRes = R.drawable.search_card_02,
-        badgeColor = Color(0xFFF6F0D9),
-        badgeTextColor = Color(0xFF806A00)
-    ),
-    FigmaSearchSurvey(
-        category = "경제·상권",
-        title = "플라스틱 빨대 vs 종이 빨대 고객 수요조사",
-        author = "OO 24시 카페 운영자",
-        points = "500P",
-        imageRes = R.drawable.search_card_03,
-        badgeColor = Color(0xFFF6E8DC),
-        badgeTextColor = Color(0xFF803C00)
-    ),
-    FigmaSearchSurvey(
-        category = "건강·의료",
-        title = "미세플라스틱 관련 인식조사",
-        author = "보건동아리 BOGEON",
-        points = "500P",
-        imageRes = R.drawable.search_card_04,
-        badgeColor = Color(0xFFEBE3F2),
-        badgeTextColor = Color(0xFF502060)
-    ),
-    FigmaSearchSurvey(
-        category = "지역·사회",
-        title = "분리수거 플라스틱&유리 구분 문의",
-        author = "골목 한바퀴",
-        points = "400P",
-        imageRes = R.drawable.search_card_05,
-        badgeColor = Color(0xFFE1ECF4),
-        badgeTextColor = Color(0xFF173F6B),
-        badgeFontSize = 12
-    )
-)
-
 @Composable
 fun SearchResultsScreen(
     searchTerm: String = "플라스틱",
-    onSurveyClick: (SearchResultSurvey) -> Unit = {},
+    onSurveyClick: (SurveyItem) -> Unit = {},
     onCreateSurveyClick: () -> Unit = {},
     onMyClick: () -> Unit = {},
-    onSearchTermChange: (String) -> Unit = {}
+    onSearchTermChange: (String) -> Unit = {},
+    category: String = "전체",
+    onCategoryChange: (String) -> Unit = {},
+    surveys: List<SurveyItem> = emptyList(),
+    loading: Boolean = false,
+    error: String? = null,
+    onRetry: () -> Unit = {}
 ) {
     var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
-    var selectedCategory by remember { mutableStateOf("전체") }
-    val visibleSurveys = FigmaSearchSurveys.filter { survey ->
+    var selectedCategory by remember(category) { mutableStateOf(category) }
+    val visibleSurveys = surveys.filter { survey ->
         (selectedCategory == "전체" || survey.category == selectedCategory) &&
             (searchQuery.isBlank() || survey.title.contains(searchQuery, ignoreCase = true) ||
                 survey.author.contains(searchQuery, ignoreCase = true))
@@ -180,31 +111,33 @@ fun SearchResultsScreen(
             )
             SearchCategoryBar(
                 selectedCategory = selectedCategory,
-                onCategorySelected = { selectedCategory = it }
+                onCategorySelected = {
+                    selectedCategory = it
+                    onCategoryChange(it)
+                }
             )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(bottom = 0.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(visibleSurveys, key = { it.title }) { survey ->
-                    SurveyResultCard(
-                        survey = survey,
-                        onClick = {
-                            onSurveyClick(
-                                SearchResultSurvey(
-                                    category = survey.category,
-                                    title = survey.title,
-                                    author = survey.author
-                                )
-                            )
-                        }
-                    )
+            SurveyRequestContent(
+                loading = loading, error = error, data = visibleSurveys, onRetry = onRetry,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                emptyMessage = "검색 결과가 없습니다."
+            ) { items ->
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(bottom = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(items, key = { it.id }) { survey ->
+                        SurveyResultCard(
+                            survey = survey,
+                            onClick = {
+                                onSurveyClick(survey)
+                            }
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(19.dp))
@@ -317,7 +250,7 @@ private fun SearchCategoryBar(
 
 @Composable
 private fun SurveyResultCard(
-    survey: FigmaSearchSurvey,
+    survey: SurveyItem,
     onClick: () -> Unit
 ) {
     val cardShape = RoundedCornerShape(10.dp)
@@ -476,5 +409,5 @@ private fun SvgAsset(
 @Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
 private fun SearchResultsScreenPreview() {
-    SearchResultsScreen()
+    SearchResultsScreen(surveys = SampleSurveys)
 }

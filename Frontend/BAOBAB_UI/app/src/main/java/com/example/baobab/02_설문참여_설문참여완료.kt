@@ -48,6 +48,7 @@ private val CompletionInter = FontFamily(
 
 @Composable
 fun SurveyCompletionScreen(
+    result: ParticipationResult? = null,
     onHomeClick: () -> Unit = {}
 ) {
     Box(
@@ -74,6 +75,9 @@ fun SurveyCompletionScreen(
             CompletionTitle()
             CompletionMessage()
             CompletionReward()
+            result?.let {
+                Text("지급 ${it.rewardPoint}P · 보유 ${it.point}P", color = CompletionGreen)
+            }
         }
 
         Box(

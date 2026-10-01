@@ -1,5 +1,11 @@
 package com.example.baobab
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,33 +79,33 @@ private data class HomeCategory(
     val selected: Boolean = false
 )
 
-data class SurveyItem(
-    val category: String = "지역·사회",
-    val title: String = "설문 제목",
-    val author: String = "설문 작성자"
-)
-
 @Composable
 fun HomeScreen(
     onSurveyClick: (SurveyItem) -> Unit = {},
-    onSearchClick: () -> Unit = {},
+    onSearchClick: (String) -> Unit = {},
     onCreateSurveyClick: () -> Unit = {},
-    onMyClick: () -> Unit = {}
+    onMyClick: () -> Unit = {},
+    searchTerm: String = "",
+    onSearchTermChange: (String) -> Unit = {},
+    surveys: List<SurveyItem> = emptyList(),
+    loading: Boolean = false,
+    error: String? = null,
+    onRetry: () -> Unit = {}
 ) {
-    var selectedCategory by remember { mutableIntStateOf(0) }
-    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
+    var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
     val categories = remember {
         listOf(
             HomeCategory("전체", Color(0xFFDFC27D), Icons.Outlined.PieChartOutline, true),
             HomeCategory("생활·편의", Color(0xFFCEE0D0), Icons.Outlined.ShoppingCart),
             HomeCategory("지역·사회", Color(0xFFC9D7ED), Icons.Outlined.Groups),
-            HomeCategory("교육", Color(0xFFFCDCC5), Icons.Outlined.School),
-            HomeCategory("창업·사업", Color(0xFFCEB8EC), Icons.Outlined.Business),
-            HomeCategory("스포츠·문화", Color(0xFFB9B6B6), Icons.Outlined.SportsSoccer),
-            HomeCategory("건강", Color(0xFFE196CE), Icons.Outlined.Person)
+            HomeCategory("교육·학습", Color(0xFFFCDCC5), Icons.Outlined.School),
+            HomeCategory("경제·상권", Color(0xFFCEB8EC), Icons.Outlined.Business),
+            HomeCategory("문화·스포츠", Color(0xFFB9B6B6), Icons.Outlined.SportsSoccer),
+            HomeCategory("건강·의료", Color(0xFFE196CE), Icons.Outlined.Person)
         )
     }
-    val surveys = remember { List(6) { SurveyItem() } }
+    val visibleSurveys = surveys.filter { selectedCategory == 0 || it.category == categories[selectedCategory].label }
 
     Box(
         modifier = Modifier
@@ -110,23 +117,27 @@ fun HomeScreen(
             HomeHeader(onMyClick = onMyClick)
             SearchBar(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
-                onClick = onSearchClick
+                onValueChange = {
+                    searchQuery = it
+                    onSearchTermChange(it)
+                },
+                onClick = { onSearchClick(searchQuery) }
             )
             CategoryRow(
                 categories = categories,
                 selectedIndex = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
             )
-            SurveyList(
-                surveys = surveys,
-                onSurveyClick = onSurveyClick,
-                modifier = Modifier.weight(1f)
-            )
+            SurveyRequestContent(
+                loading = loading, error = error, data = visibleSurveys, onRetry = onRetry,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) { items ->
+                SurveyList(surveys = items, onSurveyClick = onSurveyClick, modifier = Modifier.fillMaxSize())
+            }
         }
 
         HomeBottomBar(
-            onSearchClick = onSearchClick,
+            onSearchClick = { onSearchClick(searchQuery) },
             onCreateSurveyClick = onCreateSurveyClick,
             onMyClick = onMyClick,
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -206,9 +217,10 @@ private fun SearchBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 17.5.dp, end = 14.5.dp)
-            .height(60.dp)
-            .clickable(onClick = onClick),
+            .height(60.dp),
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onClick() }),
         textStyle = TextStyle(
             color = Color.Black,
             fontSize = 18.sp,
@@ -229,7 +241,7 @@ private fun SearchBar(
                     imageVector = Icons.Outlined.Search,
                     contentDescription = "검색",
                     tint = Color(0x4D000000),
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp).clickable(onClick = onClick)
                 )
                 Spacer(modifier = Modifier.width(12.6.dp))
                 if (value.isEmpty()) {
@@ -324,7 +336,7 @@ private fun SurveyList(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { Spacer(modifier = Modifier.height(0.dp)) }
-        items(surveys) { survey ->
+        items(surveys, key = { it.id }) { survey ->
             SurveyCard(
                 survey = survey,
                 onClick = { onSurveyClick(survey) }
@@ -355,11 +367,11 @@ private fun SurveyCard(
                 .background(Color(0xFFE9E9E9)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "NO IMAGE",
-                color = Color(0xFFAAAAAA),
-                fontSize = 20.sp,
-                maxLines = 1
+            Image(
+                painter = painterResource(survey.imageRes),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
         Column(
@@ -373,7 +385,7 @@ private fun SurveyCard(
                 text = survey.category,
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFC9D7ED))
+                    .background(survey.badgeColor)
                     .padding(horizontal = 10.dp, vertical = 7.dp),
                 color = Color.Black,
                 fontSize = 14.sp,
@@ -407,7 +419,7 @@ private fun SurveyCard(
                 contentAlignment = Alignment.CenterStart
             ) {
                 Text(
-                    text = "포인트",
+                    text = survey.points,
                     modifier = Modifier.padding(start = 12.5.dp),
                     color = Color.Black,
                     fontSize = 15.sp,

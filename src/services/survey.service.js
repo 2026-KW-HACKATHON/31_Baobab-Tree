@@ -1,405 +1,244 @@
-// Prisma ORM Client 불러오기 (DB 제어용)
 const { PrismaClient } = require('@prisma/client');
-// 비밀번호 암호화 라이브러리
-const bcrypt = require('bcrypt');
-// JWT 토큰 발급 라이브러리
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../config/auth');
 
-const prisma = new PrismaClient();
-// 토큰 암호화 시 사용할 시크릿 키
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const userSelect = {
+  id: true, email: true, loginId: true, name: true,
+  ageGroup: true, region: true, point: true, createdAt: true,
+};
+const surveyInclude = {
+  author: { select: { id: true, name: true } },
+  questions: { orderBy: { id: 'asc' }, include: { options: { orderBy: { id: 'asc' } } } },
+};
+const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
+function id(value) {
+  if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) > 2147483647) {
+    fail(400, 'Invalid ID');
+  }
+  return Number(value);
+}
+function text(value, field) {
+  if (typeof value !== 'string' || !value.trim()) fail(400, `${field} is required`);
+  return value.trim();
+}
+function count(value, field) {
+  if (!Number.isInteger(value) || value < 0 || value > 2147483647) fail(400, `${field} must be a nonnegative integer`);
+  return value;
+}
+function date(value) {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !value.trim() || !Number.isFinite(new Date(value).getTime())) fail(400, 'Invalid endDate');
+  return new Date(value);
+}
+function questionData(data) {
+  if (!data || typeof data !== 'object') fail(400, 'Invalid question');
+  const questionType = data.questionType ?? 'single';
+  if (!['single', 'short'].includes(questionType)) fail(400, 'questionType must be single or short');
+  const options = data.options ?? [];
+  if (!Array.isArray(options)) fail(400, 'options must be an array');
+  const labels = options.map(o => text(o && o.optionText, 'optionText'));
+  if (questionType === 'single' && (labels.length < 2 || new Set(labels).size !== labels.length)) {
+    fail(400, 'Single-choice questions need at least two distinct options');
+  }
+  if (questionType === 'short' && labels.length) fail(400, 'Short-answer questions cannot have options');
+  return { question: text(data.question, 'question'), questionType, options: { create: labels.map(optionText => ({ optionText })) } };
+}
+function surveyData(data, partial = false) {
+  const result = {};
+  if (!partial || data.title !== undefined) result.title = text(data.title, 'title');
+  if (data.category !== undefined) result.category = data.category === null ? null : text(data.category, 'category');
+  for (const field of ['rewardPoint', 'targetCount']) {
+    if (data[field] !== undefined) result[field] = count(data[field], field);
+  }
+  if (data.status !== undefined) {
+    if (!['OPEN', 'CLOSED'].includes(data.status)) fail(400, 'status must be OPEN or CLOSED');
+    result.status = data.status;
+  }
+  if (data.endDate !== undefined) result.endDate = date(data.endDate);
+  return result;
+}
 
 class SurveyService {
-  // 1. 인증(Auth) 로직
+  constructor(prisma = new PrismaClient()) { this.prisma = prisma; }
 
-  // [회원가입]
-  async signup({ nickname, email, password, age_group, region }) {
-    // 이메일 중복 체크
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      throw { status: 400, message: '이미 존재하는 이메일입니다.' };
-    }
-
-    // 비밀번호 해싱 (보안을 위해 10번 솔팅)
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // DB에 새 유저 생성
-    const user = await prisma.user.create({
-      data: {
-        nickname,
-        email,
-        password: hashedPassword,
-        ageGroup: age_group,
-        region,
-        point: 0 // 가입 시 초기 포인트는 0
-      }
+  async signup(data) {
+    const email = text(data.email, 'email');
+    const loginId = text(data.loginId, 'loginId');
+    const name = text(data.name, 'name');
+    text(data.password, 'password');
+    const password = data.password;
+    if (data.ageGroup !== undefined && data.ageGroup !== null) text(data.ageGroup, 'ageGroup');
+    if (data.region !== undefined && data.region !== null) text(data.region, 'region');
+    const user = await this.prisma.user.create({
+      data: { email, loginId, name, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
+      select: userSelect,
     });
-
-    return { message: '회원가입이 완료되었습니다.', userId: user.id };
+    return { message: 'Signed up', user };
   }
 
-  // [로그인]
-  async login({ email, password }) {
-    // 유저 존재 여부 확인
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw { status: 401, message: '이메일 또는 비밀번호가 올바르지 않습니다.' };
-    }
-
-    // 입력받은 비밀번호와 DB의 암호화된 비밀번호 비교
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      throw { status: 401, message: '이메일 또는 비밀번호가 올바르지 않습니다.' };
-    }
-
-    // JWT 토큰 발급 (유효기간: 1일)
+  async login(data) {
+    text(data.password, 'password');
+    const password = data.password;
+    const where = data.loginId !== undefined
+      ? { loginId: text(data.loginId, 'loginId') }
+      : { email: text(data.email, 'email') };
+    const user = await this.prisma.user.findUnique({ where });
+    if (!user || !(await bcrypt.compare(password, user.password))) fail(401, 'Invalid credentials');
     const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
-
-    return {
-      message: "로그인 성공",
-      accessToken,
-      user: {
-        user_id: user.id,
-        nickname: user.nickname,
-        point: user.point
-      }
-    };
+    const { password: omitted, ...safeUser } = user;
+    return { accessToken, user: safeUser };
   }
 
-  // 2. 사용자(마이페이지) 정보 조회
-
-  // [내 프로필 조회]
   async getUserMe(userId) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw { status: 404, message: '사용자를 찾을 수 없습니다.' };
-
-    return {
-      user_id: user.id,
-      nickname: user.nickname,
-      age_group: user.ageGroup,
-      region: user.region,
-      point: user.point
-    };
+    const user = await this.prisma.user.findUnique({ where: { id: id(userId) }, select: userSelect });
+    if (!user) fail(404, 'User not found');
+    return user;
   }
 
-  // [내가 참여한 설문 목록 및 답변 내역 조회]
   async getUserResponses(userId) {
-    const responses = await prisma.response.findMany({
-      where: { userId },
-      include: {
-        survey: true, // 참여한 설문 정보 포함
-        answers: {
-          include: { question: true } // 세부 답변 및 해당 질문 정보까지 함께 조인해서 가져옴
-        }
-      }
+    await this.getUserMe(userId);
+    return this.prisma.response.findMany({
+      where: { userId: id(userId) }, orderBy: { createdAt: 'desc' },
+      include: { survey: true, answers: { include: { question: true } } },
     });
-    return responses;
   }
 
-  // [내 포인트 잔액 및 변동 내역 조회]
   async getUserPoints(userId) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const histories = await prisma.pointHistory.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' } // 최신 내역 순 정렬
-    });
-
-    return {
-      current_point: user.point,
-      histories
-    };
+    const user = await this.getUserMe(userId);
+    const histories = await this.prisma.pointHistory.findMany({ where: { userId: id(userId) }, orderBy: { id: 'desc' } });
+    return { point: user.point, histories };
   }
 
-  // 3. 설문지(Survey) 관리
-
-  // [설문지 목록 조회 (카테고리/상태별 필터링 가능)]
-  async getSurveys({ category, status }) {
+  async getSurveys({ category, status, search } = {}) {
     const where = {};
-    if (category) where.category = category;
-    if (status) where.status = status;
-
-    const surveys = await prisma.survey.findMany({
-      where,
-      orderBy: { createdAt: 'desc' }
-    });
-
-    // 프론트엔드 파스칼/스네이크 케이스 규격에 맞게 매핑하여 리턴
-    return surveys.map(s => ({
-      survey_id: s.id,
-      title: s.title,
-      category: s.category,
-      reward_point: s.rewardPoint,
-      target_count: s.targetCount,
-      current_count: s.currentCount,
-      end_date: s.endDate,
-      status: s.status
-    }));
+    if (category !== undefined) where.category = text(category, 'category');
+    if (status !== undefined) {
+      if (!['OPEN', 'CLOSED'].includes(status)) fail(400, 'Invalid status');
+      where.status = status;
+    }
+    if (search !== undefined && typeof search !== 'string') fail(400, 'Invalid search');
+    if (search && search.trim()) where.OR = [
+      { title: { contains: search.trim() } }, { author: { name: { contains: search.trim() } } },
+    ];
+    return this.prisma.survey.findMany({ where, include: surveyInclude, orderBy: { id: 'desc' } });
   }
 
-  // [특정 설문지 상세 조회 (질문과 선택지까지 가져오기)]
   async getSurveyDetail(surveyId) {
-    const survey = await prisma.survey.findUnique({
-      where: { id: parseInt(surveyId) },
-      include: {
-        questions: {
-          include: { options: true } // 질문에 딸린 보기도 포함
-        }
-      }
-    });
-
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-
-    return {
-      survey_id: survey.id,
-      title: survey.title,
-      reward_point: survey.rewardPoint,
-      questions: survey.questions.map(q => ({
-        question_id: q.id,
-        question: q.question,
-        question_type: q.questionType,
-        options: q.options.map(o => ({
-          option_id: o.id,
-          option_text: o.optionText
-        }))
-      }))
-    };
+    const survey = await this.prisma.survey.findUnique({ where: { id: id(surveyId) }, include: surveyInclude });
+    if (!survey) fail(404, 'Survey not found');
+    return survey;
   }
 
-  // [새 설문지 등록 (질문/보기 중첩 생성)]
+  async ownedSurvey(userId, surveyId) {
+    const survey = await this.getSurveyDetail(surveyId);
+    if (survey.userId !== id(userId)) fail(403, 'Only the author can perform this action');
+    return survey;
+  }
+
   async createSurvey(userId, data) {
-    const { title, category, reward_point, target_headcount, questions } = data;
-
-    // Prisma의 nested create를 이용해 설문지 + 질문 + 보기를 한 번에 생성
-    const newSurvey = await prisma.survey.create({
-      data: {
-        userId,
-        title,
-        category,
-        rewardPoint: reward_point,
-        targetCount: target_headcount || 0,
-        questions: {
-          create: questions.map((q) => ({
-            // 프론트 요청 키값 차이(question_text vs question) 유연하게 지원
-            question: q.question_text || q.question, 
-            questionType: q.question_type || q.questionType,
-            options: {
-              create: q.options.map((opt) => ({
-                optionText: opt.option_text || opt.optionText,
-              })),
-            },
-          })),
-        },
-      },
+    if (!Array.isArray(data.questions) || !data.questions.length) fail(400, 'questions must be a nonempty array');
+    return this.prisma.survey.create({
+      data: { ...surveyData(data), userId: id(userId), questions: { create: data.questions.map(questionData) } },
+      include: surveyInclude,
     });
-
-    return newSurvey;
   }
 
-  // [설문지 기본 정보 수정]
   async updateSurvey(userId, surveyId, data) {
-    const survey = await prisma.survey.findUnique({ where: { id: parseInt(surveyId) } });
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-    if (survey.userId !== userId) throw { status: 403, message: '수정 권한이 없습니다.' }; // 작성자 확인
-
-    return await prisma.survey.update({
-      where: { id: parseInt(surveyId) },
-      data: {
-        title: data.title,
-        category: data.category,
-        rewardPoint: data.reward_point,
-        targetCount: data.target_count,
-        status: data.status,
-        endDate: data.end_date ? new Date(data.end_date) : undefined
-      }
-    });
+    await this.ownedSurvey(userId, surveyId);
+    return this.prisma.survey.update({ where: { id: id(surveyId) }, data: surveyData(data, true), include: surveyInclude });
   }
 
-  // [설문지 삭제]
   async deleteSurvey(userId, surveyId) {
-    const survey = await prisma.survey.findUnique({ where: { id: parseInt(surveyId) } });
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-    if (survey.userId !== userId) throw { status: 403, message: '삭제 권한이 없습니다.' };
-
-    // Schema에 onDelete: Cascade가 걸려있어서 질문/응답 등도 같이 삭제됨
-    await prisma.survey.delete({ where: { id: parseInt(surveyId) } });
-    return { message: '설문이 성공적으로 삭제되었습니다.' };
+    await this.ownedSurvey(userId, surveyId);
+    await this.prisma.survey.delete({ where: { id: id(surveyId) } });
+    return { message: 'Survey deleted' };
   }
 
-  // 4. 질문(Question) 개별 관리
+  async editableSurvey(userId, surveyId) {
+    const survey = await this.ownedSurvey(userId, surveyId);
+    if (await this.prisma.response.count({ where: { surveyId: survey.id } })) fail(409, 'Questions cannot change after responses exist');
+    return survey;
+  }
 
-  // [질문 개별 추가]
   async addQuestion(userId, surveyId, data) {
-    const survey = await prisma.survey.findUnique({ where: { id: parseInt(surveyId) } });
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-    if (survey.userId !== userId) throw { status: 403, message: '권한이 없습니다.' };
-
-    return await prisma.question.create({
-      data: {
-        surveyId: parseInt(surveyId),
-        question: data.question,
-        questionType: data.question_type || 'single',
-        options: data.options ? {
-          create: data.options.map(o => ({ optionText: typeof o === 'string' ? o : o.option_text }))
-        } : undefined
-      }
-    });
+    await this.editableSurvey(userId, surveyId);
+    return this.prisma.question.create({ data: { ...questionData(data), surveyId: id(surveyId) }, include: { options: true } });
   }
 
-  // [질문 개별 수정]
   async updateQuestion(userId, questionId, data) {
-    const question = await prisma.question.findUnique({
-      where: { id: parseInt(questionId) },
-      include: { survey: true }
-    });
-    if (!question) throw { status: 404, message: '질문을 찾을 수 없습니다.' };
-    if (question.survey.userId !== userId) throw { status: 403, message: '권한이 없습니다.' };
-
-    return await prisma.question.update({
-      where: { id: parseInt(questionId) },
-      data: {
-        question: data.question,
-        questionType: data.question_type
-      }
+    const question = await this.prisma.question.findUnique({ where: { id: id(questionId) }, include: { options: true } });
+    if (!question) fail(404, 'Question not found');
+    await this.editableSurvey(userId, question.surveyId);
+    const merged = questionData({ ...question, ...data });
+    return this.prisma.question.update({
+      where: { id: question.id },
+      data: { ...merged, options: { deleteMany: {}, ...merged.options } }, include: { options: true },
     });
   }
 
-  // [질문 개별 삭제]
   async deleteQuestion(userId, questionId) {
-    const question = await prisma.question.findUnique({
-      where: { id: parseInt(questionId) },
-      include: { survey: true }
-    });
-    if (!question) throw { status: 404, message: '질문을 찾을 수 없습니다.' };
-    if (question.survey.userId !== userId) throw { status: 403, message: '권한이 없습니다.' };
-
-    await prisma.question.delete({ where: { id: parseInt(questionId) } });
-    return { message: '질문이 삭제되었습니다.' };
+    const question = await this.prisma.question.findUnique({ where: { id: id(questionId) } });
+    if (!question) fail(404, 'Question not found');
+    const survey = await this.editableSurvey(userId, question.surveyId);
+    if (survey.questions.length <= 1) fail(400, 'A survey must have at least one question');
+    await this.prisma.question.delete({ where: { id: question.id } });
+    return { message: 'Question deleted' };
   }
 
-  // 5. 설문 응답 제출 및 트랜잭션 처리
-
-  // [설문 응답 제출 및 보상 지급]
   async submitResponse(userId, surveyId, answers) {
-    const targetSurveyId = parseInt(surveyId);
-
-    // 1. 설문지 유효성 및 마감 여부 체크
-    const survey = await prisma.survey.findUnique({ where: { id: targetSurveyId } });
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-    if (survey.status !== 'OPEN') throw { status: 400, message: '참여할 수 없는 설문입니다.' };
-
-    // 2. 🔥 중복 참여 체크 (유저 ID + 설문 ID 복합 키 활용)
-    const existingResponse = await prisma.response.findUnique({
-      where: {
-        userId_surveyId: { userId, surveyId: targetSurveyId }
-      }
-    });
-    if (existingResponse) throw { status: 409, message: '이미 참여한 설문입니다.' };
-
-    // 3. 🔥 단일 트랜잭션 처리 (하나라도 실패하면 전체 취소/롤백)
-    return await prisma.$transaction(async (tx) => {
-      // (1) 응답 및 세부 답변 생성
+    const participantId = id(userId);
+    const targetSurveyId = id(surveyId);
+    if (!Array.isArray(answers)) fail(400, 'answers must be an array');
+    return this.prisma.$transaction(async tx => {
+      const survey = await tx.survey.findUnique({ where: { id: targetSurveyId }, include: surveyInclude });
+      if (!survey) fail(404, 'Survey not found');
+      if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date())) fail(400, 'Survey is closed');
+      const existing = await tx.response.findUnique({ where: { userId_surveyId: { userId: participantId, surveyId: targetSurveyId } } });
+      if (existing) fail(409, 'Already participated');
+      if (!survey.questions.length || answers.length !== survey.questions.length) fail(400, 'Answer every question exactly once');
+      const seen = new Set();
+      const normalized = answers.map(a => {
+        if (!a || typeof a !== 'object') fail(400, 'Invalid answer');
+        const questionId = id(a.questionId);
+        const question = survey.questions.find(q => q.id === questionId);
+        if (!question || seen.has(questionId)) fail(400, 'Invalid or duplicate questionId');
+        seen.add(questionId);
+        const answer = text(a.answer, 'answer');
+        if (question.questionType === 'single' && !question.options.some(o => o.optionText === answer)) fail(400, 'Invalid option');
+        return { questionId, answer };
+      });
+      const updated = await tx.survey.updateMany({
+        where: { id: targetSurveyId, status: 'OPEN',
+          OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+          ...(survey.targetCount > 0 ? { currentCount: { lt: survey.targetCount } } : {}),
+        }, data: { currentCount: { increment: 1 } },
+      });
+      if (!updated.count) fail(400, 'Survey is closed or full');
       const response = await tx.response.create({
-        data: {
-          userId,
-          surveyId: targetSurveyId,
-          answers: {
-            create: answers.map(a => ({
-              questionId: a.question_id,
-              answer: String(a.answer)
-            }))
-          }
-        }
+        data: { userId: participantId, surveyId: targetSurveyId, answers: { create: normalized } },
       });
-
-      // (2) 설문지 현재 참여 인원수(+1) 증가
-      await tx.survey.update({
-        where: { id: targetSurveyId },
-        data: { currentCount: { increment: 1 } }
+      const user = await tx.user.update({ where: { id: participantId }, data: { point: { increment: survey.rewardPoint } } });
+      if (survey.rewardPoint > 0) await tx.pointHistory.create({
+        data: { userId: participantId, amount: survey.rewardPoint, description: `Survey reward: ${survey.title}` },
       });
-
-      // (3) 보상 포인트가 설정되어 있다면 포인트 적립 및 내역 남기기
-      if (survey.rewardPoint > 0) {
-        // 유저 보유 포인트 증가
-        await tx.user.update({
-          where: { id: userId },
-          data: { point: { increment: survey.rewardPoint } }
-        });
-
-        // 포인트 변동 히스토리 추가
-        await tx.pointHistory.create({
-          data: {
-            userId,
-            amount: survey.rewardPoint,
-            description: `설문 참여 보상: ${survey.title}`
-          }
-        });
-      }
-
-      return { message: '설문 참여가 완료되었습니다.', response_id: response.id };
+      return { message: 'Response submitted', responseId: response.id, rewardPoint: survey.rewardPoint, point: user.point };
     });
   }
 
-  // 6. 설문 통계 결과 계산
-
-  // [설문 결과 통계 조회]
-  async getSurveyResults(surveyId) {
-    const targetSurveyId = parseInt(surveyId);
-    const survey = await prisma.survey.findUnique({
-      where: { id: targetSurveyId },
-      include: {
-        questions: {
-          include: {
-            options: true,
-            answers: true
-          }
-        }
-      }
+  async getSurveyResults(userId, surveyId) {
+    await this.ownedSurvey(userId, surveyId);
+    const survey = await this.prisma.survey.findUnique({
+      where: { id: id(surveyId) }, include: { questions: { orderBy: { id: 'asc' }, include: { options: true, answers: true } } },
     });
-
-    if (!survey) throw { status: 404, message: '설문을 찾을 수 없습니다.' };
-
-    // 총 응답 수 집계
-    const totalResponses = await prisma.response.count({
-      where: { surveyId: targetSurveyId }
-    });
-
-    // 질문별 선택지 투표 수 및 퍼센티지(비율) 계산
-    const questionsResult = survey.questions.map(q => {
-      const optionCounts = {};
-      
-      // 보기별 카운트 0으로 초기화
-      q.options.forEach(o => {
-        optionCounts[o.optionText] = 0;
-      });
-
-      // 제출된 답변 카운트 증가
-      q.answers.forEach(a => {
-        if (optionCounts[a.answer] !== undefined) {
-          optionCounts[a.answer] += 1;
-        } else {
-          optionCounts[a.answer] = (optionCounts[a.answer] || 0) + 1;
-        }
-      });
-
-      // 퍼센티지 백분율 계산해서 결과 배열 구성
-      const results = Object.keys(optionCounts).map(opt => {
-        const count = optionCounts[opt];
-        const percentage = totalResponses > 0 ? Math.round((count / totalResponses) * 100) : 0;
-        return { option: opt, count, percentage };
-      });
-
-      return {
-        question_id: q.id,
-        results
-      };
-    });
-
-    return {
-      survey_id: survey.id,
-      total_responses: totalResponses,
-      questions: questionsResult
-    };
+    const totalResponses = await this.prisma.response.count({ where: { surveyId: survey.id } });
+    return { surveyId: survey.id, totalResponses, questions: survey.questions.map(q => {
+      const counts = new Map(q.options.map(o => [o.optionText, 0]));
+      q.answers.forEach(a => counts.set(a.answer, (counts.get(a.answer) || 0) + 1));
+      return { questionId: q.id, results: [...counts].map(([option, value]) => ({ option, count: value,
+        percentage: totalResponses ? Math.round(value / totalResponses * 100) : 0 })) };
+    }) };
   }
 }
 
-module.exports = new SurveyService();
+module.exports = { SurveyService };

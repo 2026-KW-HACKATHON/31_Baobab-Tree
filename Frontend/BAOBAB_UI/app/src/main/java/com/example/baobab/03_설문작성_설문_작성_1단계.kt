@@ -24,10 +24,7 @@ import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,13 +50,14 @@ private val SurveyFormInter = FontFamily(
 @Composable
 fun SurveyCreationStepOneScreen(
     onBackClick: () -> Unit = {},
-    onNextClick: (SurveyDraftStepOne) -> Unit = {}
+    onNextClick: (SurveyDraftStepOne) -> Unit = {},
+    state: SurveyCreationState = remember { SurveyCreationState() }
 ) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var introduction by remember { mutableStateOf("") }
-    var audience by remember { mutableStateOf("") }
-    var deadline by remember { mutableStateOf("2026. 10. 08.") }
+    var title by state::title
+    var category by state::category
+    var introduction by state::introduction
+    var audience by state::audience
+    var deadline by state::deadline
 
     Box(
         modifier = Modifier

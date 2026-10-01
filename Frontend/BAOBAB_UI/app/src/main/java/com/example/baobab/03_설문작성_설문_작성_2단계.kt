@@ -65,17 +65,10 @@ private val QuestionInter = FontFamily(
 fun SurveyCreationStepTwoScreen(
     onBackClick: () -> Unit = {},
     onCreatePageClick: () -> Unit = {},
-    onNextClick: (List<SurveyQuestionDraft>) -> Unit = {}
+    onNextClick: (List<SurveyQuestionDraft>) -> Unit = {},
+    state: SurveyCreationState = remember { SurveyCreationState() }
 ) {
-    val questions = remember {
-        mutableStateListOf(
-            SurveyQuestionDraft(
-                type = SurveyQuestionType.MULTIPLE_CHOICE,
-                options = listOf("정답 옵션 1", "정답 옵션 2")
-            ),
-            SurveyQuestionDraft(type = SurveyQuestionType.SHORT_ANSWER)
-        )
-    }
+    val questions = state.questions
 
     Column(
         modifier = Modifier

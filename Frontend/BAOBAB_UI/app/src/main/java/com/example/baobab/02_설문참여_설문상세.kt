@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -51,22 +52,12 @@ private val SurveyDetailInter = FontFamily(
     Font(R.font.inter_variable, FontWeight.Bold)
 )
 
-private data class RelatedSurvey(
-    val title: String,
-    val author: String,
-    val points: String,
-    val categoryFontSize: Int
-)
-
-private val RelatedSurveys = listOf(
-    RelatedSurvey("분리수거 플라스틱&유리 구분 문의", "골목 한바퀴", "400P", 12),
-    RelatedSurvey("무분별한 거리 현수막 설치에 대한 주민 인식 조사", "골목 한바퀴", "400P", 12),
-    RelatedSurvey("광운대 앞 지쿠터 마구잡이 주차로 인한 불편성", "도보 통학러", "500P", 11)
-)
-
 @Composable
 fun SurveyDetailScreen(
-    onParticipateClick: () -> Unit = {}
+    onParticipateClick: () -> Unit = {},
+    survey: SurveyItem = SampleSurveys.first(),
+    onRelatedSurveyClick: (SurveyItem) -> Unit = {},
+    relatedSurveys: List<SurveyItem> = emptyList()
 ) {
     val panelShape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp)
 
@@ -76,7 +67,7 @@ fun SurveyDetailScreen(
             .background(SurveyDetailBackground)
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),//임시로 바꿔놓음
+            painter = painterResource(survey.imageRes),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -106,12 +97,15 @@ fun SurveyDetailScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 23.dp)
                 ) {
-                    SurveyCategory()
-                    SurveyTitleBlock()
-                    SurveyMetaRow()
-                    SurveyStats()
-                    SurveyDescription()
-                    RelatedSurveySection()
+                    SurveyCategory(survey)
+                    SurveyTitleBlock(survey)
+                    SurveyMetaRow(survey)
+                    SurveyStats(survey)
+                    SurveyDescription(survey)
+                    RelatedSurveySection(
+                        surveys = relatedSurveys.filter { it.category == survey.category && it.id != survey.id },
+                        onSurveyClick = onRelatedSurveyClick
+                    )
                 }
             }
         }
@@ -124,7 +118,7 @@ fun SurveyDetailScreen(
 }
 
 @Composable
-private fun SurveyCategory() {
+private fun SurveyCategory(survey: SurveyItem) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -133,13 +127,14 @@ private fun SurveyCategory() {
     ) {
         Box(
             modifier = Modifier
-                .size(width = 70.dp, height = 32.dp)
+                .height(32.dp)
+                .padding(horizontal = 10.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFC9D7ED)),
+                .background(survey.badgeColor),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "지역·사회",
+                text = survey.category,
                 color = Color.Black,
                 fontFamily = SurveyDetailInter,
                 fontSize = 14.sp,
@@ -151,17 +146,17 @@ private fun SurveyCategory() {
 }
 
 @Composable
-private fun SurveyTitleBlock() {
+private fun SurveyTitleBlock(survey: SurveyItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp),
+                .heightIn(min = 44.dp),
             contentAlignment = Alignment.TopStart
         ) {
             Text(
-                text = "설문 조사 제목",
-                modifier = Modifier.padding(top = 10.dp),
+                text = survey.title,
+                modifier = Modifier.padding(vertical = 10.dp),
                 color = Color.Black,
                 fontFamily = SurveyDetailInter,
                 fontSize = 20.sp,
@@ -172,12 +167,12 @@ private fun SurveyTitleBlock() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .heightIn(min = 50.dp)
                 .padding(horizontal = 1.dp),
             contentAlignment = Alignment.TopStart
         ) {
             Text(
-                text = "설문조사 소개 글",
+                text = survey.description ?: "소개 미등록",
                 color = SurveyDetailSecondary,
                 fontFamily = SurveyDetailInter,
                 fontSize = 12.sp,
@@ -189,7 +184,7 @@ private fun SurveyTitleBlock() {
 }
 
 @Composable
-private fun SurveyMetaRow() {
+private fun SurveyMetaRow(survey: SurveyItem) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -205,7 +200,7 @@ private fun SurveyMetaRow() {
                 .clip(CircleShape)
         )
         Text(
-            text = "작성자 이름",
+            text = survey.author,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = 50.dp, top = 26.dp)
@@ -235,7 +230,7 @@ private fun SurveyMetaRow() {
                 .size(30.dp)
         )
         Text(
-            text = "설문 마감 날짜",
+            text = survey.deadline ?: "마감일 미등록",
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = 224.5.dp, top = 26.dp)
@@ -253,7 +248,7 @@ private fun SurveyMetaRow() {
 }
 
 @Composable
-private fun SurveyStats() {
+private fun SurveyStats(survey: SurveyItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,17 +260,17 @@ private fun SurveyStats() {
     ) {
         SurveyStat(
             icon = "survey_participants_icon.svg",
-            label = "30명 참여",
+            label = survey.participantCount?.let { "${it}명 참여" } ?: "참여자 미등록",
             modifier = Modifier.weight(1f)
         )
         SurveyStat(
             icon = "survey_hourglass_icon.svg",
-            label = "소요시간",
+            label = survey.duration ?: "소요시간 미등록",
             modifier = Modifier.weight(1f)
         )
         SurveyStat(
             icon = "survey_points_icon.svg",
-            label = "포인트",
+            label = survey.points,
             modifier = Modifier.weight(1f)
         )
     }
@@ -312,7 +307,7 @@ private fun SurveyStat(
 }
 
 @Composable
-private fun SurveyDescription() {
+private fun SurveyDescription(survey: SurveyItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -338,9 +333,9 @@ private fun SurveyDescription() {
                 .background(SurveyDetailPanel)
                 .padding(horizontal = 1.dp, vertical = 5.dp)
         ) {
-            SurveyDescriptionRow(label = "대상", value = "월계 1동 주민 누구나")
-            SurveyDescriptionRow(label = "주제", value = "교통/주차 공간 부족")
-            SurveyDescriptionRow(label = "문항 수", value = "12문항")
+            SurveyDescriptionRow(label = "대상", value = survey.audience ?: "미등록")
+            SurveyDescriptionRow(label = "주제", value = survey.title)
+            SurveyDescriptionRow(label = "문항 수", value = survey.questionCount?.let { "${it}문항" } ?: "미등록")
         }
         Box(
             modifier = Modifier
@@ -399,7 +394,10 @@ private fun SurveyDescriptionRow(
 }
 
 @Composable
-private fun RelatedSurveySection() {
+private fun RelatedSurveySection(
+    surveys: List<SurveyItem>,
+    onSurveyClick: (SurveyItem) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -407,14 +405,14 @@ private fun RelatedSurveySection() {
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        RelatedSurveys.forEach { survey ->
-            RelatedSurveyCard(survey)
+        surveys.forEach { survey ->
+            RelatedSurveyCard(survey, onClick = { onSurveyClick(survey) })
         }
     }
 }
 
 @Composable
-private fun RelatedSurveyCard(survey: RelatedSurvey) {
+private fun RelatedSurveyCard(survey: SurveyItem, onClick: () -> Unit) {
     val cardShape = RoundedCornerShape(10.dp)
 
     Box(
@@ -423,9 +421,10 @@ private fun RelatedSurveyCard(survey: RelatedSurvey) {
             .shadow(2.dp, cardShape)
             .clip(cardShape)
             .background(Color.White)
+            .clickable(onClick = onClick)
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),//임시
+            painter = painterResource(survey.imageRes),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -483,16 +482,16 @@ private fun RelatedSurveyCard(survey: RelatedSurvey) {
                 .align(Alignment.TopStart)
                 .padding(start = 10.dp, top = 75.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFE1ECF4))
+                .background(survey.badgeColor)
                 .border(2.dp, Color.White, CircleShape)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "지역·사회",
-                color = Color(0xFF173F6B),
+                text = survey.category,
+                color = survey.badgeTextColor,
                 fontFamily = SurveyDetailInter,
-                fontSize = survey.categoryFontSize.sp,
+                fontSize = survey.badgeFontSize.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1
             )

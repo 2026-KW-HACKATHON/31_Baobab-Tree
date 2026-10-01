@@ -25,10 +25,7 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,11 +52,14 @@ private val StepThreeInter = FontFamily(
 fun SurveyCreationStepThreeScreen(
     onBackClick: () -> Unit = {},
     onImageAttachClick: () -> Unit = {},
-    onCompleteClick: (SurveySettingsDraft) -> Unit = {}
+    onCompleteClick: (SurveySettingsDraft) -> Unit = {},
+    submitting: Boolean = false,
+    error: String? = null,
+    state: SurveyCreationState = remember { SurveyCreationState() }
 ) {
-    var rewardPerPerson by remember { mutableStateOf("100P") }
-    var rewardRecipients by remember { mutableStateOf("10명") }
-    var selectedDuration by remember { mutableStateOf("5분 이하") }
+    var rewardPerPerson by state::rewardPerPerson
+    var rewardRecipients by state::rewardRecipients
+    var selectedDuration by state::selectedDuration
 
     Box(
         modifier = Modifier
@@ -81,6 +81,7 @@ fun SurveyCreationStepThreeScreen(
                         bottom = 30.dp
                     )
             ) {
+                error?.let { Text(it, color = Color.Red) }
                 SectionLabel(number = 1, text = "리워드 지급")
                 Spacer(modifier = Modifier.height(14.dp))
                 RewardSettingsCard(
@@ -115,7 +116,7 @@ fun SurveyCreationStepThreeScreen(
                     .height(55.dp)
                     .clip(RoundedCornerShape(40.dp))
                     .background(StepThreeGreen)
-                    .clickable {
+                    .clickable(enabled = !submitting) {
                         onCompleteClick(
                             SurveySettingsDraft(
                                 rewardPerPerson = rewardPerPerson,
@@ -127,7 +128,7 @@ fun SurveyCreationStepThreeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "설문 작성 완료",
+                    text = if (submitting) "등록 중..." else "설문 작성 완료",
                     color = Color.White,
                     fontFamily = StepThreeInter,
                     fontSize = 20.sp,
