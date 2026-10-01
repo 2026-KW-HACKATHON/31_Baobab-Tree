@@ -1,3 +1,5 @@
+package com.example.baobab
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,10 +17,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Business
@@ -32,7 +37,6 @@ import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.SportsSoccer
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,10 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -56,76 +58,74 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.text.BasicTextField
 
-private val HomeBackground = Color(0xFFFDF9F1)
-private val HeaderSurface = Color(0xFFFEFBF8)
-private val InputSurface = Color(0xFFF4F1E9)
-private val BaobabGreen = Color(0xFF2D4F37)
-private val MutedText = Color(0x80000000)
+private val SearchBackground = Color(0xFFFDF9F1)
+private val SearchBottomSurface = Color(0xFFFEFBF8)
+private val SearchInputSurface = Color(0xFFF4F1E9)
+private val SearchBaobabGreen = Color(0xFF2D4F37)
+private val SearchMutedText = Color(0x80000000)
 
-private data class HomeCategory(
+private data class SearchCategory(
     val label: String,
     val color: Color,
-    val icon: ImageVector,
-    val selected: Boolean = false
+    val icon: ImageVector
 )
 
-data class SurveyItem(
+data class SearchResultSurvey(
     val category: String = "지역·사회",
     val title: String = "설문 제목",
     val author: String = "설문 작성자"
 )
 
 @Composable
-fun HomeScreen(
-    onSurveyClick: (SurveyItem) -> Unit = {},
-    onSearchClick: () -> Unit = {},
+fun SearchResultsScreen(
+    searchTerm: String = "플라스틱",
+    onSurveyClick: (SearchResultSurvey) -> Unit = {},
+    onHomeClick: () -> Unit = {},
     onCreateSurveyClick: () -> Unit = {},
     onMyClick: () -> Unit = {}
 ) {
     var selectedCategory by remember { mutableIntStateOf(0) }
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
     val categories = remember {
         listOf(
-            HomeCategory("전체", Color(0xFFDFC27D), Icons.Outlined.PieChartOutline, true),
-            HomeCategory("생활·편의", Color(0xFFCEE0D0), Icons.Outlined.ShoppingCart),
-            HomeCategory("지역·사회", Color(0xFFC9D7ED), Icons.Outlined.Groups),
-            HomeCategory("교육", Color(0xFFFCDCC5), Icons.Outlined.School),
-            HomeCategory("창업·사업", Color(0xFFCEB8EC), Icons.Outlined.Business),
-            HomeCategory("스포츠·문화", Color(0xFFB9B6B6), Icons.Outlined.SportsSoccer),
-            HomeCategory("건강", Color(0xFFE196CE), Icons.Outlined.Person)
+            SearchCategory("전체", Color(0xFFDFC27D), Icons.Outlined.PieChartOutline),
+            SearchCategory("생활·편의", Color(0xFFCEE0D0), Icons.Outlined.ShoppingCart),
+            SearchCategory("지역·사회", Color(0xFFC9D7ED), Icons.Outlined.Groups),
+            SearchCategory("교육", Color(0xFFFCDCC5), Icons.Outlined.School),
+            SearchCategory("창업·사업", Color(0xFFCEB8EC), Icons.Outlined.Business),
+            SearchCategory("스포츠·문화", Color(0xFFB9B6B6), Icons.Outlined.SportsSoccer),
+            SearchCategory("건강", Color(0xFFE196CE), Icons.Outlined.Person)
         )
     }
-    val surveys = remember { List(6) { SurveyItem() } }
+    val surveys = remember { List(4) { SearchResultSurvey() } }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(HomeBackground)
+            .background(SearchBackground)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Spacer(modifier = Modifier.height(44.dp))
-            HomeHeader(onMyClick = onMyClick)
-            SearchBar(
+            SearchResultsHeader(onMyClick = onMyClick)
+            SearchResultsSearchBar(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
-                onClick = onSearchClick
+                onValueChange = { searchQuery = it }
             )
-            CategoryRow(
+            SearchResultsCategories(
                 categories = categories,
                 selectedIndex = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
             )
-            SurveyList(
+            SearchResultsList(
                 surveys = surveys,
                 onSurveyClick = onSurveyClick,
                 modifier = Modifier.weight(1f)
             )
         }
 
-        HomeBottomBar(
-            onSearchClick = onSearchClick,
+        SearchResultsBottomBar(
+            onHomeClick = onHomeClick,
             onCreateSurveyClick = onCreateSurveyClick,
             onMyClick = onMyClick,
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -134,17 +134,17 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(onMyClick: () -> Unit) {
+private fun SearchResultsHeader(onMyClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(66.dp)
             .padding(horizontal = 15.dp)
     ) {
-        BaobabLogo(
+        SearchResultsLogo(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = 1.dp, y = (-1.dp))
+                .offset(x = 1.dp, y = (-1).dp)
         )
         Icon(
             imageVector = Icons.Outlined.NotificationsNone,
@@ -176,14 +176,14 @@ private fun HomeHeader(onMyClick: () -> Unit) {
 }
 
 @Composable
-private fun BaobabLogo(modifier: Modifier = Modifier) {
+private fun SearchResultsLogo(modifier: Modifier = Modifier) {
     val logo = buildAnnotatedString {
-        withStyle(SpanStyle(color = BaobabGreen)) { append("BA") }
+        withStyle(SpanStyle(color = SearchBaobabGreen)) { append("BA") }
         withStyle(SpanStyle(color = Color(0xFF563C28))) { append("OB") }
-        withStyle(SpanStyle(color = BaobabGreen)) { append("AB") }
+        withStyle(SpanStyle(color = SearchBaobabGreen)) { append("AB") }
     }
 
-    Text(
+    androidx.compose.material3.Text(
         text = logo,
         modifier = modifier.width(150.dp),
         fontFamily = FontFamily(Font(R.font.jaro_regular)),
@@ -194,10 +194,9 @@ private fun BaobabLogo(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SearchBar(
+private fun SearchResultsSearchBar(
     value: String,
-    onValueChange: (String) -> Unit,
-    onClick: () -> Unit
+    onValueChange: (String) -> Unit
 ) {
     BasicTextField(
         value = value,
@@ -205,8 +204,7 @@ private fun SearchBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 17.5.dp, end = 14.5.dp)
-            .height(60.dp)
-            .clickable(onClick = onClick),
+            .height(60.dp),
         singleLine = true,
         textStyle = TextStyle(
             color = Color.Black,
@@ -220,7 +218,7 @@ private fun SearchBar(
                     .height(40.dp)
                     .offset(y = 9.5.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(InputSurface)
+                    .background(SearchInputSurface)
                     .padding(horizontal = 15.5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -231,14 +229,6 @@ private fun SearchBar(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(12.6.dp))
-                if (value.isEmpty()) {
-                    Text(
-                        text = "검색",
-                        color = Color(0x96000000),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
                 innerTextField()
             }
         }
@@ -246,8 +236,8 @@ private fun SearchBar(
 }
 
 @Composable
-private fun CategoryRow(
-    categories: List<HomeCategory>,
+private fun SearchResultsCategories(
+    categories: List<SearchCategory>,
     selectedIndex: Int,
     onCategorySelected: (Int) -> Unit
 ) {
@@ -260,8 +250,9 @@ private fun CategoryRow(
         horizontalArrangement = Arrangement.spacedBy(15.9.dp)
     ) {
         categories.forEachIndexed { index, category ->
-            CategoryItem(
-                category = category.copy(selected = index == selectedIndex),
+            SearchCategoryItem(
+                category = category,
+                selected = index == selectedIndex,
                 onClick = { onCategorySelected(index) }
             )
         }
@@ -269,8 +260,9 @@ private fun CategoryRow(
 }
 
 @Composable
-private fun CategoryItem(
-    category: HomeCategory,
+private fun SearchCategoryItem(
+    category: SearchCategory,
+    selected: Boolean,
     onClick: () -> Unit
 ) {
     Column(
@@ -300,7 +292,7 @@ private fun CategoryItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 5.dp),
-            color = if (category.selected) Color.Black else MutedText,
+            color = if (selected) Color.Black else SearchMutedText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -310,9 +302,9 @@ private fun CategoryItem(
 }
 
 @Composable
-private fun SurveyList(
-    surveys: List<SurveyItem>,
-    onSurveyClick: (SurveyItem) -> Unit,
+private fun SearchResultsList(
+    surveys: List<SearchResultSurvey>,
+    onSurveyClick: (SearchResultSurvey) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -322,9 +314,8 @@ private fun SurveyList(
         contentPadding = PaddingValues(top = 0.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { Spacer(modifier = Modifier.height(0.dp)) }
         items(surveys) { survey ->
-            SurveyCard(
+            SearchResultCard(
                 survey = survey,
                 onClick = { onSurveyClick(survey) }
             )
@@ -333,8 +324,8 @@ private fun SurveyList(
 }
 
 @Composable
-private fun SurveyCard(
-    survey: SurveyItem,
+private fun SearchResultCard(
+    survey: SearchResultSurvey,
     onClick: () -> Unit
 ) {
     Row(
@@ -418,8 +409,8 @@ private fun SurveyCard(
 }
 
 @Composable
-private fun HomeBottomBar(
-    onSearchClick: () -> Unit,
+private fun SearchResultsBottomBar(
+    onHomeClick: () -> Unit,
     onCreateSurveyClick: () -> Unit,
     onMyClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -429,27 +420,27 @@ private fun HomeBottomBar(
             .fillMaxWidth()
             .height(93.dp)
             .clip(RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp))
-            .background(HeaderSurface),
+            .background(SearchBottomSurface),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Top
     ) {
-        BottomBarItem(
+        SearchBottomItem(
             label = "홈",
             icon = Icons.Outlined.Home,
+            onClick = onHomeClick
+        )
+        SearchBottomItem(
+            label = "설문 찾기",
+            icon = Icons.Outlined.Search,
             selected = true,
             onClick = {}
         )
-        BottomBarItem(
-            label = "설문 찾기",
-            icon = Icons.Outlined.Search,
-            onClick = onSearchClick
-        )
-        BottomBarItem(
+        SearchBottomItem(
             label = "설문 만들기",
             icon = Icons.Outlined.PieChartOutline,
             onClick = onCreateSurveyClick
         )
-        BottomBarItem(
+        SearchBottomItem(
             label = "MY",
             icon = Icons.Outlined.Person,
             onClick = onMyClick
@@ -458,7 +449,7 @@ private fun HomeBottomBar(
 }
 
 @Composable
-private fun BottomBarItem(
+private fun SearchBottomItem(
     label: String,
     icon: ImageVector,
     selected: Boolean = false,
@@ -474,17 +465,17 @@ private fun BottomBarItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (selected) BaobabGreen else Color.Black,
+            tint = if (selected) SearchBaobabGreen else Color.Black,
             modifier = Modifier
-                .padding(top = 16.dp)
+                .padding(top = if (selected) 15.33.dp else 16.33.dp)
                 .size(30.dp)
         )
         Text(
             text = label,
             modifier = Modifier
                 .width(80.dp)
-                .padding(top = 3.7.dp),
-            color = if (selected) BaobabGreen else Color.Black,
+                .padding(top = if (selected) 3.7.dp else 3.dp),
+            color = if (selected) SearchBaobabGreen else Color.Black,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
