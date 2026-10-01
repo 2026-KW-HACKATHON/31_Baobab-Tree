@@ -1,6 +1,3 @@
-package com.example.baobab
-
-import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -191,7 +187,7 @@ private fun LoginLink(
     text: String,
     onClick: () -> Unit
 ) {
-    ClickableText(
+    androidx.compose.foundation.text.ClickableText(
         text = AnnotatedString(text),
         onClick = { onClick() },
         style = TextStyle(
