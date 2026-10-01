@@ -3,3 +3,36 @@ node_modules/
 prisma/dev.db
 prisma/dev.db-journal
 desktop.ini
+# Gradle
+.gradle/
+**/build/
+
+# Local configuration
+local.properties
+
+# IntelliJ / Android Studio
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# OS
+.DS_Store
+
+# Android
+**/captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# Gradle daemon
+**/gradle/gradle-daemon-jvm.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
