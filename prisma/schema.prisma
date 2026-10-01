@@ -1,0 +1,108 @@
+// DB 연결 세팅
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             Int            @id @default(autoincrement()) @map("user_id")
+  email          String         @unique
+  password       String
+  loginId        String         @unique @map("login_id")
+  name           String
+  ageGroup       String?        @map("age_group")
+  region         String?
+  point          Int            @default(0)
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  surveys        Survey[]       @relation("CreatedSurveys")
+  responses      Response[]
+  pointHistories PointHistory[]
+
+  @@map("USER")
+}
+
+model Survey {
+  id           Int        @id @default(autoincrement()) @map("survey_id")
+  userId       Int        @map("user_id")
+  title        String
+  category     String?
+  rewardPoint  Int        @default(0) @map("reward_point")
+  targetCount  Int        @default(0) @map("target_count")
+  currentCount Int        @default(0) @map("current_count")
+  status       String     @default("OPEN")
+  endDate      DateTime?  @map("end_date")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  author       User       @relation("CreatedSurveys", fields: [userId], references: [id], onDelete: Cascade)
+  questions    Question[]
+  responses    Response[]
+
+  @@map("SURVEY")
+}
+
+model Question {
+  id           Int            @id @default(autoincrement()) @map("question_id")
+  surveyId     Int            @map("survey_id")
+  question     String
+  questionType String         @default("single") @map("question_type")
+
+  survey       Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  options      SurveyOption[]
+  answers      Answer[]
+
+  @@map("QUESTION")
+}
+
+model SurveyOption {
+  id         Int      @id @default(autoincrement()) @map("option_id")
+  questionId Int      @map("question_id")
+  optionText String   @map("option_text")
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("SURVEY_OPTION")
+}
+
+model Response {
+  id        Int      @id @default(autoincrement()) @map("response_id")
+  userId    Int      @map("user_id")
+  surveyId  Int      @map("survey_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers   Answer[]
+
+  @@unique([userId, surveyId])
+  @@map("RESPONSE")
+}
+
+model Answer {
+  id         Int      @id @default(autoincrement()) @map("answer_id")
+  responseId Int      @map("response_id")
+  questionId Int      @map("question_id")
+  answer     String
+
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("ANSWER")
+}
+
+model PointHistory {
+  id          Int      @id @default(autoincrement()) @map("history_id")
+  userId      Int      @map("user_id")
+  amount      Int
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("POINT_HISTORY")
+}
