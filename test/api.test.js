@@ -55,6 +55,41 @@ test('schema-backed API integration', async t => {
     participant = result.data.user;
     participantToken = (await request('POST', '/auth/login', { email: participant.email, password })).data.accessToken;
   });
+  await t.test('account profile updates persist and protect identity and point balance', async () => {
+    assert.equal((await request('PATCH', '/users/me', { name: 'Changed' })).status, 401);
+    let result = await request('PATCH', '/users/me', {
+      name: 'New Author', email: 'updated@example.test', region: 'Wolgye', ageGroup: '20s'
+    }, token);
+    assert.equal(result.status, 200);
+    assert.equal(result.data.name, 'New Author');
+    assert.equal(result.data.email, 'updated@example.test');
+    assert.equal(result.data.region, 'Wolgye');
+    assert.equal(result.data.password, undefined);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.name, 'New Author');
+    for (const payload of [{ point: 99999 }, { id: participant.id }, { loginId: 'stolen' },
+      { password: 'changed' }, { name: '' }, { email: 'invalid' }, {}]) {
+      assert.equal((await request('PATCH', '/users/me', payload, token)).status, 400);
+    }
+    assert.equal((await request('PATCH', '/users/me', { email: participant.email }, token)).status, 409);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 0);
+    result = await request('PATCH', '/users/me', {
+      name: author.name, email: author.email, region: null, ageGroup: null
+    }, token);
+    assert.equal(result.status, 200);
+    assert.equal(result.data.region, null);
+  });
+  await t.test('backend legacy field names map to the Android contract', async () => {
+    let result = await request('POST', '/surveys', {
+      title: 'Legacy compatibility', reward_point: 10, target_headcount: 5,
+      questions: [{ text: 'Why?', question_type: 'short' }]
+    }, token);
+    assert.equal(result.status, 201);
+    assert.equal(result.data.rewardPoint, 10);
+    assert.equal(result.data.targetCount, 5);
+    assert.equal(result.data.questions[0].question, 'Why?');
+    assert.equal((await request('DELETE', `/surveys/${result.data.id}`, undefined, token)).status, 200);
+  });
+
   await t.test('protected routes reject missing and invalid tokens', async () => {
     assert.equal((await request('GET', '/users/me')).status, 401);
     assert.equal((await request('GET', '/users/me', undefined, 'invalid')).status, 401);

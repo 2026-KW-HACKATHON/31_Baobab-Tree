@@ -10,7 +10,8 @@ function createApp(service) {
   app.use('/api', createSurveyRouter(service));
   app.use((req, res) => res.status(404).json({ error: 'Endpoint not found' }));
   app.use((err, req, res, next) => {
-    const status = err.status || ({ P2002: 409, P2025: 404, P2003: 400 }[err.code]) || 500;
+    const suppliedStatus = err.status || ({ P2002: 409, P2025: 404, P2003: 400 }[err.code]);
+    const status = Number.isInteger(suppliedStatus) && suppliedStatus >= 400 && suppliedStatus < 600 ? suppliedStatus : 500;
     const message = { P2002: 'Duplicate record', P2025: 'Record not found', P2003: 'Invalid reference' }[err.code]
       || (status < 500 ? err.message : 'Internal server error');
     if (status >= 500) console.error(err);

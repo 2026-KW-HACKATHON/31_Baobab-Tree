@@ -48,6 +48,7 @@ Install dependencies at the root. `npm start` and `npm test` also work from
 | POST | /auth/login | No | 200 |
 | POST | /auth/logout | Yes | 200 |
 | GET | /users/me | Yes | 200 |
+| PATCH | /users/me | Yes | 200 |
 | GET | /users/me/responses | Yes | 200 |
 | GET | /users/me/points | Yes | 200 |
 | GET | /surveys | No | 200 |
@@ -230,3 +231,22 @@ on an ephemeral local port. It verifies authentication, Prisma writes,
 ownership, answer validation, rewards, duplicates, deadlines, capacity,
 transaction rollback, and the compatibility entry points. The temporary
 database is removed after testing.
+
+## Account profile editing and backend compatibility
+
+`PATCH /api/users/me` accepts `name`, `email`, `ageGroup`, and `region`.
+Name and email must be nonempty; email must have a valid format and remain unique.
+Region and ageGroup may be null to clear them. Unknown fields, including user ID,
+login ID, password and point, are rejected. JWT identifies the account to update.
+The response is the public user object used by `GET /users/me`.
+
+The merged backend branch additionally supports legacy request aliases:
+`reward_point`, `target_headcount` / `target_count`, `end_date`,
+`question_type`, question `text`, string options or `option_text` / `text`,
+and answer `question_id` / `value`. Responses retain the Android camelCase contract.
+Email and author-only result access are preserved for compatibility with existing
+accounts and the Android app. A production server must set `JWT_SECRET`.
+
+Android sharing uses `baobab://surveys/<id>` and the Android Sharesheet.
+A recipient needs the BAOBAB app and network access to the configured API server.
+No public web landing page is deployed yet.

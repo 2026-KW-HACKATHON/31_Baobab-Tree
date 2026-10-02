@@ -33,18 +33,23 @@ function date(value) {
 }
 function questionData(data) {
   if (!data || typeof data !== 'object') fail(400, 'Invalid question');
-  const questionType = data.questionType ?? 'single';
+  const questionType = data.questionType ?? data.question_type ?? data.type ?? 'single';
   if (!['single', 'short'].includes(questionType)) fail(400, 'questionType must be single or short');
   const options = data.options ?? [];
   if (!Array.isArray(options)) fail(400, 'options must be an array');
-  const labels = options.map(o => text(o && o.optionText, 'optionText'));
+  const labels = options.map(o => text(typeof o === 'string' ? o : o && (o.optionText ?? o.option_text ?? o.text), 'optionText'));
   if (questionType === 'single' && (labels.length < 2 || new Set(labels).size !== labels.length)) {
     fail(400, 'Single-choice questions need at least two distinct options');
   }
   if (questionType === 'short' && labels.length) fail(400, 'Short-answer questions cannot have options');
-  return { question: text(data.question, 'question'), questionType, options: { create: labels.map(optionText => ({ optionText })) } };
+  return { question: text(data.question ?? data.text, 'question'), questionType, options: { create: labels.map(optionText => ({ optionText })) } };
 }
 function surveyData(data, partial = false) {
+  data = { ...data,
+    rewardPoint: data.rewardPoint ?? data.reward_point,
+    targetCount: data.targetCount ?? data.target_headcount ?? data.target_count,
+    endDate: data.endDate !== undefined ? data.endDate : data.end_date,
+  };
   const result = {};
   if (!partial || data.title !== undefined) result.title = text(data.title, 'title');
   if (data.category !== undefined) result.category = data.category === null ? null : text(data.category, 'category');
@@ -94,6 +99,25 @@ class SurveyService {
     const user = await this.prisma.user.findUnique({ where: { id: id(userId) }, select: userSelect });
     if (!user) fail(404, 'User not found');
     return user;
+  }
+
+  async updateUserMe(userId, data) {
+    await this.getUserMe(userId);
+    const fields = ['name', 'email', 'ageGroup', 'region'];
+    if (!data || typeof data !== 'object' || Array.isArray(data) ||
+        !Object.keys(data).length || Object.keys(data).some(key => !fields.includes(key))) {
+      fail(400, 'Only name, email, ageGroup and region can be updated');
+    }
+    const changes = {};
+    if (data.name !== undefined) changes.name = text(data.name, 'name');
+    if (data.email !== undefined) {
+      changes.email = text(data.email, 'email');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(changes.email)) fail(400, 'Invalid email');
+    }
+    for (const key of ['ageGroup', 'region']) {
+      if (data[key] !== undefined) changes[key] = data[key] === null ? null : text(data[key], key);
+    }
+    return this.prisma.user.update({ where: { id: id(userId) }, data: changes, select: userSelect });
   }
 
   async getUserResponses(userId) {
@@ -200,11 +224,11 @@ class SurveyService {
       const seen = new Set();
       const normalized = answers.map(a => {
         if (!a || typeof a !== 'object') fail(400, 'Invalid answer');
-        const questionId = id(a.questionId);
+        const questionId = id(a.questionId ?? a.question_id);
         const question = survey.questions.find(q => q.id === questionId);
         if (!question || seen.has(questionId)) fail(400, 'Invalid or duplicate questionId');
         seen.add(questionId);
-        const answer = text(a.answer, 'answer');
+        const answer = text(a.answer ?? a.value, 'answer');
         if (question.questionType === 'single' && !question.options.some(o => o.optionText === answer)) fail(400, 'Invalid option');
         return { questionId, answer };
       });

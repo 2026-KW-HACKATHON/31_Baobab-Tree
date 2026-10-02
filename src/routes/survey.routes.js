@@ -12,6 +12,7 @@ function createSurveyRouter(service = new SurveyService()) {
   // Stateless JWT logout: clients discard their token; existing tokens expire normally.
   router.post('/auth/logout', auth, handle(200, () => ({ message: 'Discard the access token on the client' })));
   router.get('/users/me', auth, handle(200, req => service.getUserMe(req.user.userId)));
+  router.patch('/users/me', auth, handle(200, req => service.updateUserMe(req.user.userId, (req.body || {}))));
   router.get('/users/me/responses', auth, handle(200, req => service.getUserResponses(req.user.userId)));
   router.get('/users/me/points', auth, handle(200, req => service.getUserPoints(req.user.userId)));
   router.get('/surveys', handle(200, req => service.getSurveys(req.query)));
