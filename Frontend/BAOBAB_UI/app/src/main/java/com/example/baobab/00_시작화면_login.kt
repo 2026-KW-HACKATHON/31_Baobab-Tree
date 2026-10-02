@@ -97,7 +97,7 @@ private fun LoginContent(
         Text(
             text = logo,
             modifier = Modifier.width(150.dp),
-            fontFamily = FontFamily(Font(R.font.jaro_regular)),
+            fontFamily = FontFamily.SansSerif,
             fontSize = 35.sp,
             lineHeight = 35.sp,
             textAlign = TextAlign.Center
@@ -158,7 +158,7 @@ private fun LoginInput(
         singleLine = true,
         textStyle = TextStyle(
             color = Color.Black,
-            fontFamily = FontFamily(Font(R.font.jaro_regular)),
+            fontFamily = FontFamily.SansSerif,
             fontSize = 15.sp,
             lineHeight = 20.sp
         ),
@@ -175,7 +175,7 @@ private fun LoginInput(
                     Text(
                         text = placeholder,
                         color = PlaceholderColor,
-                        fontFamily = FontFamily(Font(R.font.jaro_regular)),
+                        fontFamily = FontFamily.SansSerif,
                         fontSize = 15.sp,
                         lineHeight = 20.sp
                     )
@@ -196,7 +196,7 @@ private fun LoginLink(
         onClick = { onClick() },
         style = TextStyle(
             color = BaobabGreen,
-            fontFamily = FontFamily.Default,
+            fontFamily = FontFamily.SansSerif,
             fontWeight = FontWeight.Normal,
             fontSize = 16.sp,
             lineHeight = 24.sp

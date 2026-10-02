@@ -22,8 +22,8 @@
 | --- | --- |
 | 백엔드 2명 공통 | 실제 구현은 **루트 `src/`**, 기준 스키마는 **루트 `prisma/schema.prisma`**. `Backend/src/`는 루트 구현을 참조하는 진입점이므로 그곳에 별도 구현을 추가하지 말 것. 스키마 변경 시 `Backend/prisma/schema.prisma`도 동일하게 맞출 것. |
 | 인증·사용자 관련 작업자 | 사용자 필드는 `loginId`, `name`, `email`, `password`. 보호 API는 `Authorization: Bearer <accessToken>` 사용. 사용자 식별은 요청 body가 아닌 JWT의 `userId` 기준. 기존 `nickname` 기반 DB는 데이터 이전 필요. |
-| 설문·응답 관련 작업자 | 질문은 `question`, `questionType: single/short`, 선택지는 `options[].optionText`. 응답은 `answers: [{questionId, answer}]`이며 객관식 `answer`는 **선택지 텍스트**. 모든 질문에 정확히 한 번 답해야 함. 중복 참여·마감·정원 초과 차단과 포인트 트랜잭션 유지. |
-| 프론트 1명 | 실제 Android 프로젝트는 **`Frontend/BAOBAB_UI`**. 루트 `BAOBAB_UI/*.kt`는 앱 빌드 대상이 아님. 디자인 수정 시 아래 ViewModel 상태와 callback 연결을 유지할 것. **MY 화면은 디자인을 기다리는 중이며 아직 placeholder.** |
+| 설문·응답 관련 작업자 | 질문은 `question`, `questionType: single/short`, 선택지는 `options[].optionText`. 응답은 `answers: [{questionId, answer}]`이며 객관식 `answer`는 **선택지 텍스트**. 필수 질문에 정확히 한 번 답해야 하며 선택 질문은 생략 가능. 중복 참여·마감·정원 초과 차단과 포인트 트랜잭션 유지. |
+| 프론트 1명 | 실제 Android 프로젝트는 **`Frontend/BAOBAB_UI`**. 루트 `BAOBAB_UI/*.kt`는 앱 빌드 대상이 아님. 디자인 수정 시 아래 ViewModel 상태와 callback 연결을 유지할 것. **MY 화면은 계정 정보·포인트·내 설문·참여 이력·작성자 통계에 연결됨.** |
 
 프론트 주요 연결 위치:
 
@@ -33,13 +33,14 @@
 - `AccountViewModel.kt` / `AccountScreen.kt`: 로그인 토큰, 회원가입·로그인, 등록·응답 제출 상태.
 - `ParticipationScreen.kt`: 질문별 답변 입력·검증, 답변 상태 보관.
 
-## 아직 남은 작업
+## 10/03 후속 작업 반영
 
-- **MY 디자인·API 연결:** 사용자 정보, 보유 포인트, 내가 만든 설문·참여 이력 등 화면 범위 협의 후 연결.
-- **결과 화면:** 작성자용 결과 API는 있지만 Android 결과 화면은 아직 연결하지 않음.
-- **저장 필드 협의:** 소개·대상·소요시간·질문별 필수 여부·이미지는 현재 스키마에 없어 저장되지 않음. 앱의 모든 질문은 필수 응답으로 처리. 필요하면 스키마 → API → UI 순서로 함께 확장.
-- **로그인 유지·로그아웃:** 토큰은 메모리에만 보관하며 앱 프로세스 재시작 시 재로그인. 앱의 로그아웃 UI와 지속 로그인은 아직 미구현.
-- **배포 설정:** HTTPS API 주소와 별도 `JWT_SECRET` 설정 필요. 기본 비밀키는 로컬 개발용.
+- **MY:** 계정 정보 수정, 포인트, 내 설문 목록·삭제·공유, 참여 이력과 내가 제출한 답변 조회.
+- **결과:** 작성자용 객관식 비율·주관식 응답 화면 연결. 선택 질문의 비율은 해당 질문 응답자 기준.
+- **저장:** 소개·대상·소요시간·사진·질문별 필수 여부를 스키마 → API → Android에 연결.
+- **로그인:** Android Keystore로 토큰을 암호화해 보관하고 재시작 시 검증·복원. 로그아웃·만료 시 삭제. JWT 유효기간은 1일이며 갱신 토큰은 없음.
+- **배포:** 실제 HTTPS 주소는 아직 없음. 릴리스 주소 검증과 운영 JWT_SECRET 검증 준비 완료. [배포 설정](deployment.md) 참고.
+- **기존 DB:** 서버를 멈추고 루트에서 `npm run db:migrate:survey-fields`, `npm run db:generate` 실행. 자동 백업 후 추가 필드만 이전하며 기존 데이터는 보존.
 
 ## 각자 실행하는 방법
 

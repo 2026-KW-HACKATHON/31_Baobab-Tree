@@ -41,10 +41,7 @@ private val CompletionGreen = Color(0xFF2F5539)
 private val CompletionGold = Color(0xFFFDC854)
 private val CompletionBrown = Color(0xFF8C510A)
 private val CompletionGray = Color(0xCC545454)
-private val CompletionInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val CompletionInter = FontFamily.SansSerif
 
 @Composable
 fun SurveyCompletionScreen(

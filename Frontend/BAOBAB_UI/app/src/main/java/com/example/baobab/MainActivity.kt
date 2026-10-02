@@ -1,6 +1,7 @@
 package com.example.baobab
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -9,23 +10,73 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Text
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModel
 import com.example.baobab.ui.theme.BAOBABTheme
 
 class MainActivity : ComponentActivity() {
+    private val navigation by lazy { ViewModelProvider(this)[BaobabViewModel::class.java] }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openSharedSurvey(intent)
+    }
+
+    private fun openSharedSurvey(intent: Intent) {
+        if (intent.action == Intent.ACTION_VIEW) sharedSurveyId(intent.dataString)?.let {
+            navigation.openSurvey(SurveyItem(id = it))
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val viewModel = ViewModelProvider(this)[BaobabViewModel::class.java]
         val surveyData = ViewModelProvider(this)[SurveyDataViewModel::class.java]
-        val account = ViewModelProvider(this)[AccountViewModel::class.java]
+        val account = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = AccountViewModel(
+                sessionStore = EncryptedSessionStore(applicationContext, BuildConfig.SURVEY_API_BASE_URL)
+            ) as T
+        })[AccountViewModel::class.java]
         val participation = ViewModelProvider(this)[ParticipationViewModel::class.java]
+        val myPage = ViewModelProvider(this)[MyPageViewModel::class.java]
+        if (savedInstanceState == null) openSharedSurvey(intent)
 
 
         setContent {
             BAOBABTheme {
+                LaunchedEffect(myPage.sessionExpired) {
+                    if (myPage.sessionExpired) {
+                        account.invalidateSession()
+                        myPage.load(null)
+                        if (viewModel.currentScreen == BaobabScreen.MY) viewModel.navigate(BaobabScreen.LOGIN)
+                    }
+                }
+                var pendingDeletion by remember { mutableStateOf<SurveyItem?>(null) }
+                val demoWallet = remember(account.token) { DemoWalletState() }
+                pendingDeletion?.let { survey ->
+                    SurveyDeleteDialog(
+                        survey = survey,
+                        deleting = account.busy,
+                        error = account.error,
+                        onDismiss = { pendingDeletion = null; account.clearError() },
+                        onConfirm = {
+                            account.deleteSurvey(survey) {
+                                pendingDeletion = null
+                                surveyData.loadSurveys(force = true)
+                                myPage.load(account.token)
+                                if (viewModel.currentScreen == BaobabScreen.DETAIL) viewModel.goHome()
+                            }
+                        }
+                    )
+                }
                 account.participationNotice?.let { notice ->
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { account.dismissParticipationNotice() },
@@ -44,6 +95,11 @@ class MainActivity : ComponentActivity() {
                     // 로그인
                     BaobabScreen.LOGIN -> {
                         LocalNetworkPermissionGate {
+                            LaunchedEffect(Unit) {
+                                account.restoreSession { restored ->
+                                    if (restored && viewModel.currentScreen == BaobabScreen.LOGIN) viewModel.goHome()
+                                }
+                            }
                             AccountScreen(false, account,
                                 onSuccess = {
                                     if (viewModel.resumeParticipationAfterLogin) {
@@ -75,7 +131,11 @@ class MainActivity : ComponentActivity() {
                     BaobabScreen.HOME -> {
                         LocalNetworkPermissionGate {
                             LaunchedEffect(Unit) { surveyData.loadSurveys() }
+                            LaunchedEffect(account.token) { myPage.load(account.token) }
                             HomeScreen(
+                                currentPoint = myPage.profile?.point ?: account.point,
+                                loggedIn = account.token != null,
+                                onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
                                 surveys = surveyData.listState.data.orEmpty(),
                                 loading = surveyData.listState.loading,
                                 error = surveyData.listState.error,
@@ -135,7 +195,11 @@ class MainActivity : ComponentActivity() {
                     // 설문 상세
                     BaobabScreen.DETAIL -> {
                         LocalNetworkPermissionGate {
+                            LaunchedEffect(Unit) { account.restoreSession { } }
                             val selected = requireNotNull(viewModel.selectedSurvey)
+                            LaunchedEffect(account.token) {
+                                if (account.token != null && myPage.profile == null) myPage.load(account.token)
+                            }
                             LaunchedEffect(selected.id) { surveyData.loadDetail(selected.id) }
                             SurveyRequestContent(
                                 loading = surveyData.detailId != selected.id || surveyData.detailState.loading,
@@ -147,6 +211,9 @@ class MainActivity : ComponentActivity() {
                                 key(survey.id) {
                                     SurveyDetailScreen(
                                         survey = survey,
+                                        canDelete = account.token != null && myPage.profile?.id != null &&
+                                            survey.userId == myPage.profile?.id,
+                                        onDelete = { account.clearError(); pendingDeletion = survey },
                                         relatedSurveys = surveyData.listState.data.orEmpty(),
                                         onRelatedSurveyClick = { viewModel.openSurvey(it) },
                                         onParticipateClick = {
@@ -232,9 +299,6 @@ class MainActivity : ComponentActivity() {
                             error = account.error,
                             state = viewModel.creationState,
                             onBackClick = { if (!account.busy) viewModel.goBack() },
-                            onImageAttachClick = {
-                                // 이미지 첨부 기능은 나중에 연결
-                            },
                             onCompleteClick = { settings ->
                                 if (account.token == null) {
                                     viewModel.resumeCreationAfterLogin = true
@@ -261,9 +325,37 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    BaobabScreen.POINTS -> {
+                        LocalNetworkPermissionGate {
+                            LaunchedEffect(account.token) { myPage.load(account.token) }
+                            key(account.token) {
+                                PointWalletScreen(
+                                    wallet = demoWallet,
+                                    point = myPage.profile?.point ?: account.point,
+                                    loggedIn = account.token != null,
+                                    loading = myPage.loading,
+                                    error = myPage.error,
+                                    onRetry = { myPage.load(account.token) },
+                                    onBack = { viewModel.goBack() },
+                                    onLogin = { account.clearError(); viewModel.navigate(BaobabScreen.LOGIN) }
+                                )
+                            }
+                        }
+                    }
+
                     // MY
                     BaobabScreen.MY -> {
-                        Text("MY 화면")
+                        LocalNetworkPermissionGate {
+                            MyPageScreen(myPage, account.token,
+                                onBack = { viewModel.goHome() },
+                                onLogin = { account.clearError(); viewModel.navigate(BaobabScreen.LOGIN) },
+                                onLogout = { account.logout(); myPage.load(null); viewModel.goHome() },
+                                onCreate = { viewModel.beginCreation() },
+                                onProfileUpdated = { surveyData.loadSurveys(force = true) },
+                                onOpenSurvey = { viewModel.openSurvey(SurveyItem(id = it)) },
+                                onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
+                                onDelete = { account.clearError(); pendingDeletion = it })
+                        }
                     }
                 }
             }

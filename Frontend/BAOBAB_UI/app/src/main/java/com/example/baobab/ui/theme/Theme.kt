@@ -4,12 +4,16 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -18,9 +22,16 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = Color(0xFF2F5539),
+    onPrimary = Color.White,
+    secondary = Color(0xFF66472E),
+    tertiary = Color(0xFF697369),
+    background = Color(0xFFFDF9F1),
+    surface = Color(0xFFFFFCF7),
+    onBackground = Color(0xFF26372B),
+    onSurface = Color(0xFF26372B),
+    surfaceVariant = Color(0xFFEAF0E5),
+    outline = Color(0xFF87927F)
 
     /* Other default colors to override
     background = Color(0xFFFFFBFE),
@@ -35,9 +46,9 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun BAOBABTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -53,6 +64,13 @@ fun BAOBABTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes(
+            extraSmall = RoundedCornerShape(8.dp),
+            small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(16.dp),
+            large = RoundedCornerShape(20.dp),
+            extraLarge = RoundedCornerShape(28.dp)
+        ),
         content = content
     )
 }

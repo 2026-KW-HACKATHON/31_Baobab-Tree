@@ -167,8 +167,7 @@ SQLite determines case sensitivity.
 }
 ```
 
-Each question must be answered exactly once with a nonempty string. The
-schema has no `required` field, so all questions are required at present.
+Every required question must be answered exactly once with a nonempty string. Optional questions may be omitted from answers; do not submit empty answer strings.
 A single-choice answer is the option text, not its ID. IDs must belong to
 this survey; duplicate and foreign question IDs are rejected.
 
@@ -212,10 +211,14 @@ point display, `currentCount` to participant count, `endDate` to deadline,
 and `questions.length` to question count. The actual question and option IDs
 from detail must be retained for submission.
 
-The current schema does not store survey description, audience, expected
-duration, attached image, or per-question required flags. Those Android draft
-fields are not persisted by this API. Adding them requires a separate schema
-change and data migration.
+The schema stores optional `description`, `audience`, `duration`, and `imageData`.
+`imageData` is a JPEG, PNG or WebP base64 data URI (up to 1,000,000 characters); null clears the image.
+Text metadata accepts up to 5,000 characters per field; null clears it.
+Creation and survey PATCH accept these fields and read responses include them.
+Question `required` is a boolean, defaults to true, and is accepted by creation and question routes.
+Results include per-question `responseCount`; percentages use that question's answered count, excluding skipped optional answers.
+For existing current-schema databases run `npm run db:migrate:survey-fields` before
+`npm run db:generate`. The migration creates a dated SQLite backup and preserves existing rows.
 
 ## Errors and tests
 
@@ -250,3 +253,5 @@ accounts and the Android app. A production server must set `JWT_SECRET`.
 Android sharing uses `baobab://surveys/<id>` and the Android Sharesheet.
 A recipient needs the BAOBAB app and network access to the configured API server.
 No public web landing page is deployed yet.
+
+Production configuration and Android session behavior: see [deployment setup](deployment.md).

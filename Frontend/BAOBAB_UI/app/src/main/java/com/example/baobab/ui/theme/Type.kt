@@ -3,32 +3,24 @@ package com.example.baobab.ui.theme
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+private fun TextStyle.appFont() = copy(fontFamily = FontFamily.SansSerif, letterSpacing = 0.sp)
+private val defaults = Typography()
+val Typography = defaults.copy(
+    displayLarge = defaults.displayLarge.appFont(),
+    displayMedium = defaults.displayMedium.appFont(),
+    displaySmall = defaults.displaySmall.appFont(),
+    headlineLarge = defaults.headlineLarge.appFont(),
+    headlineMedium = defaults.headlineMedium.appFont(),
+    headlineSmall = defaults.headlineSmall.appFont(),
+    titleLarge = defaults.titleLarge.appFont(),
+    titleMedium = defaults.titleMedium.appFont(),
+    titleSmall = defaults.titleSmall.appFont(),
+    bodyLarge = defaults.bodyLarge.appFont(),
+    bodyMedium = defaults.bodyMedium.appFont(),
+    bodySmall = defaults.bodySmall.appFont(),
+    labelLarge = defaults.labelLarge.appFont(),
+    labelMedium = defaults.labelMedium.appFont(),
+    labelSmall = defaults.labelSmall.appFont()
 )

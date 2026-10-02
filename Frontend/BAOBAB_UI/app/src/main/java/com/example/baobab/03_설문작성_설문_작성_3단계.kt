@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,6 +29,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,13 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val StepThreeBackground = Color(0xFFFDF9F1)
-private val StepThreeSurface = Color(0xFFF4F1E9)
+private val StepThreeSurface = Color.White
 private val StepThreeGreen = Color(0xFF2F5539)
-private val StepThreeBorder = Color(0x80545454)
-private val StepThreeInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val StepThreeBorder = Color(0xFFD9E0D5)
+private val StepThreeInter = FontFamily.SansSerif
 
 @Composable
 fun SurveyCreationStepThreeScreen(
@@ -60,16 +72,31 @@ fun SurveyCreationStepThreeScreen(
     var rewardPerPerson by state::rewardPerPerson
     var rewardRecipients by state::rewardRecipients
     var selectedDuration by state::selectedDuration
+    val context = LocalContext.current
+    var selectedImage by remember { mutableStateOf<Uri?>(null) }
+    var imageLoading by remember { mutableStateOf(false) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) { imageLoading = true; selectedImage = uri }
+    }
+    LaunchedEffect(selectedImage) {
+        val uri = selectedImage ?: return@LaunchedEffect
+        imageError = null
+        val result = withContext(Dispatchers.IO) { runCatching { readSurveyImage(context, uri) } }
+        result.fold({ state.imageData = it }, { imageError = it.message ?: "이미지를 불러오지 못했습니다." })
+        imageLoading = false
+        selectedImage = null
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(StepThreeBackground)
+            .safeDrawingPadding().imePadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Spacer(modifier = Modifier.height(54.dp))
-            StepThreeHeader(onBackClick = onBackClick)
-            StepThreeProgress()
+            SurveyFormHeader(onBackClick = onBackClick)
+            SurveyFormProgress(currentStep = 3)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -78,7 +105,7 @@ fun SurveyCreationStepThreeScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = 20.dp,
-                        bottom = 30.dp
+                        bottom = 120.dp
                     )
             ) {
                 error?.let { Text(it, color = Color.Red) }
@@ -98,7 +125,20 @@ fun SurveyCreationStepThreeScreen(
                     onDurationSelected = { selectedDuration = it }
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                ImageAttachmentSection(onImageAttachClick = onImageAttachClick)
+                ImageAttachmentSection(onImageAttachClick = {
+                    if (!imageLoading && !submitting) {
+                        onImageAttachClick()
+                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                })
+                if (imageLoading) Text("사진을 준비하고 있어요…", color = StepThreeGreen)
+                imageError?.let { Text(it, color = Color.Red) }
+                state.imageData?.let {
+                    Spacer(Modifier.height(12.dp))
+                    SurveyImage(SurveyItem(category = state.category, imageData = it),
+                        Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(16.dp)))
+                    TextButton(onClick = { state.imageData = null }, enabled = !submitting && !imageLoading) { Text("사진 제거") }
+                }
             }
         }
 
@@ -114,14 +154,15 @@ fun SurveyCreationStepThreeScreen(
                     .padding(top = 20.dp, start = 18.dp, end = 18.dp)
                     .fillMaxWidth()
                     .height(55.dp)
-                    .clip(RoundedCornerShape(40.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(StepThreeGreen)
-                    .clickable(enabled = !submitting) {
+                    .clickable(enabled = !submitting && !imageLoading) {
                         onCompleteClick(
                             SurveySettingsDraft(
                                 rewardPerPerson = rewardPerPerson,
                                 rewardRecipients = rewardRecipients,
-                                duration = selectedDuration
+                                duration = selectedDuration,
+                                imageData = state.imageData
                             )
                         )
                     },
@@ -131,7 +172,7 @@ fun SurveyCreationStepThreeScreen(
                     text = if (submitting) "등록 중..." else "설문 작성 완료",
                     color = Color.White,
                     fontFamily = StepThreeInter,
-                    fontSize = 20.sp,
+                    fontSize = 17.sp,
                     lineHeight = 24.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -144,140 +185,16 @@ fun SurveyCreationStepThreeScreen(
 data class SurveySettingsDraft(
     val rewardPerPerson: String,
     val rewardRecipients: String,
-    val duration: String
+    val duration: String,
+    val imageData: String? = null
 )
-
-@Composable
-private fun StepThreeHeader(onBackClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 16.dp)
-                .clickable(onClick = onBackClick),
-            horizontalArrangement = Arrangement.spacedBy((-8).dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = "뒤로가기",
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = null,
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-        Text(
-            text = "설문 작성하기",
-            modifier = Modifier.align(Alignment.Center),
-            color = Color.Black,
-            fontFamily = StepThreeInter,
-            fontSize = 23.sp,
-            lineHeight = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun StepThreeProgress() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(81.dp)
-    ) {
-        ProgressConnector(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 72.dp, top = 34.dp),
-            active = true
-        )
-        ProgressConnector(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 216.dp, top = 34.dp),
-            active = true
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 27.dp,
-                    end = 27.dp,
-                    top = 20.dp
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            ProgressStepCircle(number = "1", label = "기본 정보")
-            ProgressStepCircle(number = "2", label = "문항 작성")
-            ProgressStepCircle(number = "3", label = "설문 설정")
-        }
-    }
-}
-
-@Composable
-private fun ProgressStepCircle(number: String, label: String) {
-    Column(
-        modifier = Modifier.width(60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(50))
-                .background(StepThreeGreen),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = number,
-                color = Color.White,
-                fontFamily = StepThreeInter,
-                fontSize = 23.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-        Text(
-            text = label,
-            modifier = Modifier.padding(top = 4.dp),
-            color = StepThreeGreen,
-            fontFamily = StepThreeInter,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun ProgressConnector(
-    modifier: Modifier = Modifier,
-    active: Boolean
-) {
-    Box(
-        modifier = modifier
-            .width(114.dp)
-            .height(2.dp)
-            .background(if (active) StepThreeGreen else StepThreeBorder)
-    )
-}
 
 @Composable
 private fun SectionLabel(number: Int, text: String) {
     Text(
         text = "$number. $text",
         modifier = Modifier
-            .height(20.dp)
+            .heightIn(min = 24.dp)
             .padding(start = 16.dp),
         color = StepThreeGreen,
         fontFamily = StepThreeInter,
@@ -300,7 +217,7 @@ private fun RewardSettingsCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp)
+            .heightIn(min = 150.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(StepThreeSurface)
             .border(1.dp, StepThreeBorder, RoundedCornerShape(20.dp))
@@ -330,7 +247,7 @@ private fun RewardSettingsCard(
                 fontFamily = StepThreeInter,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(150.dp)
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = "${points}P",
@@ -364,7 +281,7 @@ private fun RewardRow(
             fontFamily = StepThreeInter,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(150.dp)
+            modifier = Modifier.weight(1f)
         )
         BasicTextField(
             value = value,
@@ -423,66 +340,26 @@ private fun DurationSelector(
 
 @Composable
 private fun TimeSectionLabel() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp)
-    ) {
-        Text(
-            text = "2. 소요 시간",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 31.dp),
-            color = StepThreeGreen,
-            fontFamily = StepThreeInter,
-            fontSize = 16.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    SectionLabel(number = 2, text = "소요 시간")
 }
 
 @Composable
 private fun ImageAttachmentSection(onImageAttachClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(70.dp)
-    ) {
-        Text(
-            text = "3. 이미지 첨부",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 41.dp),
-            color = StepThreeGreen,
-            fontFamily = StepThreeInter,
-            fontSize = 16.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionLabel(number = 3, text = "이미지 첨부")
         Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 141.dp, top = 35.dp)
-                .width(90.dp)
-                .height(31.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(StepThreeGreen)
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White)
+                .border(1.dp, StepThreeBorder, RoundedCornerShape(12.dp))
                 .clickable(onClick = onImageAttachClick),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "파일 첨부 >",
-                color = Color.White,
-                fontFamily = StepThreeInter,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
+            Text("파일 첨부", color = StepThreeGreen, fontSize = 15.sp,
+                fontFamily = StepThreeInter, fontWeight = FontWeight.Bold)
         }
     }
 }
-
 @Composable
 private fun DurationOption(
     text: String,
@@ -502,15 +379,15 @@ private fun DurationOption(
             .border(
                 width = 1.dp,
                 color = StepThreeBorder,
-                shape = RoundedCornerShape(40.dp)
+                shape = RoundedCornerShape(16.dp)
             )
-            .background(Color.White, RoundedCornerShape(40.dp))
+            .background(if (selected) StepThreeGreen else Color.White, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = Color.Black,
+            color = if (selected) Color.White else StepThreeGreen,
             fontFamily = StepThreeInter,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,

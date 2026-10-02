@@ -36,3 +36,7 @@ local.properties
 # Android Studio / IntelliJ
 .idea/
 *.iml
+
+# Local database migration backups
+prisma/dev.before-*.db
+.env.production

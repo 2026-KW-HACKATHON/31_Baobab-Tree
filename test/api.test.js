@@ -90,6 +90,56 @@ test('schema-backed API integration', async t => {
     assert.equal((await request('DELETE', `/surveys/${result.data.id}`, undefined, token)).status, 200);
   });
 
+  await t.test('metadata, images, optional answers and per-question statistics persist', async () => {
+    const imageData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=';
+    const payload = { title: 'Stored fields', description: 'Introduction', audience: 'Students', duration: '5 minutes', imageData,
+      questions: [{ question: 'Required', questionType: 'short' },
+        { question: 'Optional', questionType: 'single', required: false, options: ['Yes', 'No'] }] };
+    for (const invalid of [{ ...payload, imageData: 'data:image/png;base64,YmFk' },
+      { ...payload, questions: [{ question: 'Bad', questionType: 'short', required: 'false' }] }]) {
+      assert.equal((await request('POST', '/surveys', invalid, token)).status, 400);
+    }
+    const created = await request('POST', '/surveys', payload, token);
+    assert.equal(created.status, 201);
+    const saved = (await request('GET', '/surveys/' + created.data.id)).data;
+    for (const field of ['description', 'audience', 'duration', 'imageData']) assert.equal(saved[field], payload[field]);
+    assert.equal(saved.questions[0].required, true);
+    assert.equal(saved.questions[1].required, false);
+    const url = '/surveys/' + saved.id;
+    assert.equal((await request('POST', url + '/responses', { answers: [] }, participantToken)).status, 400);
+    assert.equal((await request('POST', url + '/responses', { answers: [
+      { questionId: saved.questions[0].id, answer: 'Reason' }, { questionId: saved.questions[1].id, answer: 'Invalid' }
+    ] }, participantToken)).status, 400);
+    assert.equal((await request('POST', url + '/responses', { answers: [
+      { questionId: saved.questions[0].id, answer: 'Reason' }
+    ] }, participantToken)).status, 201);
+    let results = (await request('GET', url + '/results', undefined, token)).data;
+    assert.equal(results.totalResponses, 1);
+    assert.equal(results.questions[1].responseCount, 0);
+    assert.ok(results.questions[1].results.every(result => result.percentage === 0));
+    const history = (await request('GET', '/users/me/responses', undefined, participantToken)).data;
+    assert.equal(history[0].answers.length, 1);
+    assert.equal(history[0].answers[0].question.question, 'Required');
+    assert.equal((await request('POST', url + '/responses', { answers: [
+      { questionId: saved.questions[0].id, answer: 'Another reason' }, { questionId: saved.questions[1].id, answer: 'Yes' }
+    ] }, token)).status, 201);
+    results = (await request('GET', url + '/results', undefined, token)).data;
+    assert.equal(results.totalResponses, 2);
+    assert.equal(results.questions[1].responseCount, 1);
+    assert.equal(results.questions[1].results.find(result => result.option === 'Yes').percentage, 100);
+    const cleared = await request('PATCH', url, { description: null, audience: null, duration: null, imageData: null }, token);
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.data.imageData, null);
+    assert.equal((await request('DELETE', url, undefined, token)).status, 200);
+    const optional = await request('POST', '/surveys', { title: 'All optional',
+      questions: [{ question: 'Optional', questionType: 'short', required: false }] }, token);
+    assert.equal(optional.status, 201);
+    assert.equal((await request('POST', '/surveys/' + optional.data.id + '/responses', { answers: [] }, participantToken)).status, 201);
+    assert.equal((await request('DELETE', '/surveys/' + optional.data.id, undefined, token)).status, 200);
+    assert.equal(await prisma.response.count(), 0);
+    assert.equal(await prisma.pointHistory.count(), 0);
+  });
+
   await t.test('protected routes reject missing and invalid tokens', async () => {
     assert.equal((await request('GET', '/users/me')).status, 401);
     assert.equal((await request('GET', '/users/me', undefined, 'invalid')).status, 401);

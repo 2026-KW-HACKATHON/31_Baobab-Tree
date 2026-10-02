@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -23,9 +24,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -47,41 +51,40 @@ private val SurveyDetailGreen = Color(0xFF2F5539)
 private val SurveyDetailSecondary = Color(0xFF545454)
 private val SurveyDetailPanel = Color(0x80FDF9F1)
 private val SurveyDetailBorder = Color(0x80545454)
-private val SurveyDetailInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val SurveyDetailInter = FontFamily.SansSerif
 
 @Composable
 fun SurveyDetailScreen(
     onParticipateClick: () -> Unit = {},
     survey: SurveyItem = SampleSurveys.first(),
     onRelatedSurveyClick: (SurveyItem) -> Unit = {},
-    relatedSurveys: List<SurveyItem> = emptyList()
+    relatedSurveys: List<SurveyItem> = emptyList(),
+    canDelete: Boolean = false,
+    onDelete: () -> Unit = {}
 ) {
-    val panelShape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp)
+    val context = LocalContext.current
+    val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(SurveyDetailBackground)
+            .safeDrawingPadding()
     ) {
-        Image(
-            painter = painterResource(survey.imageRes),
-            contentDescription = null,
+        SurveyImage(survey = survey,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .height(240.dp)
+                .height(220.dp)
         )
 
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = 220.dp)
+                .padding(top = 200.dp)
                 .fillMaxWidth()
-                .height(768.dp)
+                .fillMaxSize()
                 .shadow(2.dp, panelShape)
                 .clip(panelShape)
                 .background(Color.White)
@@ -99,6 +102,12 @@ fun SurveyDetailScreen(
                 ) {
                     SurveyCategory(survey)
                     SurveyTitleBlock(survey)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { shareSurvey(context, survey) }) { Text("공유") }
+                        if (canDelete) TextButton(onClick = onDelete) {
+                            Text("설문 삭제", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                     SurveyMetaRow(survey)
                     SurveyStats(survey)
                     SurveyDescription(survey)
@@ -423,9 +432,7 @@ private fun RelatedSurveyCard(survey: SurveyItem, onClick: () -> Unit) {
             .background(Color.White)
             .clickable(onClick = onClick)
     ) {
-        Image(
-            painter = painterResource(survey.imageRes),
-            contentDescription = null,
+        SurveyImage(survey = survey,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .align(Alignment.TopCenter)

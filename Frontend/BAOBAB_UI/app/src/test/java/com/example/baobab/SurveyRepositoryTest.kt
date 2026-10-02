@@ -70,6 +70,179 @@ class SurveyRepositoryTest {
     }
 
     @Test
+    fun mapsSavedSurveyFieldsAndQuestionRequirementAndParticipationAnswers() {
+        body = "[$surveyJson]".replace("\"category\": null", """"category": null,
+            "description":"About","audience":"Students","duration":"5분","imageData":"data:image/jpeg;base64,/9j/"""")
+            .replace("\"questionType\": \"single\"", "\"questionType\": \"single\", \"required\": false")
+        val survey = repository.getSurveys().single()
+        assertEquals("About", survey.description)
+        assertEquals("Students", survey.audience)
+        assertEquals("5분", survey.duration)
+        assertFalse(survey.questions.single().required)
+        assertNotNull(survey.imageData)
+        body = """[{"id":3,"createdAt":"2026-10-03T00:00:00Z",
+            "survey":{"id":7,"title":"Travel","category":"Life","rewardPoint":300},
+            "answers":[{"answer":"Bus","question":{"question":"Bus or walk?"}}]}]"""
+        val history = repository.getParticipations("session-token").single()
+        assertEquals("7", history.surveyId)
+        assertEquals(AnswerHistory("Bus or walk?", "Bus"), history.answers.single())
+        assertEquals("Bearer session-token", authorization)
+    }
+
+    @Test
+    fun optionalAnswersCanBeSkippedButRequiredAndInvalidAnswersAreRejected() {
+        val required = SurveyQuestion(9, "Required", "short", emptyList())
+        val optional = SurveyQuestion(10, "Optional", "single", listOf(SurveyOption(1, "Yes")), required = false)
+        val survey = SurveyItem(id = "7", questions = listOf(required, optional))
+        val payload = answerPayload(survey, mapOf(9 to "Answer", 10 to " "))
+        val answers = com.google.gson.Gson().toJsonTree(payload).asJsonObject.getAsJsonArray("answers")
+        assertEquals(1, answers.size())
+        assertThrows(IllegalArgumentException::class.java) { answerPayload(survey, emptyMap()) }
+        assertThrows(IllegalArgumentException::class.java) { answerPayload(survey, mapOf(9 to "Answer", 10 to "Invalid")) }
+        assertThrows(IllegalArgumentException::class.java) { answerPayload(survey, mapOf(9 to "Answer", 99 to "Foreign")) }
+        assertEquals(emptyList<Any>(), answerPayload(survey.copy(questions = listOf(optional)), emptyMap())["answers"])
+    }
+
+    @Test
+    fun savedSessionRestoresInANewViewModelAndLogoutClearsIt() {
+        val store = MemorySessionStore()
+        val worker = QueuedWorker()
+        val ui = java.util.ArrayDeque<Runnable>()
+        val executor = java.util.concurrent.Executor { ui.add(it) }
+        val first = AccountViewModel(repository, worker, executor, store)
+        body = """{"accessToken":"saved-token"}"""
+        first.login("author", "password") {}
+        worker.runNext(); ui.removeFirst().run()
+        assertEquals("saved-token", store.read())
+        val restarted = AccountViewModel(repository, worker, executor, store)
+        body = """{"id":1,"name":"Author","email":"a@example.com","loginId":"author","point":300}"""
+        var restored = false
+        restarted.restoreSession { restored = it }
+        assertNull(restarted.token)
+        worker.runNext(); ui.removeFirst().run()
+        assertTrue(restored)
+        assertEquals("saved-token", restarted.token)
+        assertEquals(300, restarted.point)
+        restarted.logout()
+        assertNull(store.read())
+        assertNull(restarted.token)
+        worker.shutdownNow()
+    }
+
+    @Test
+    fun serverFailureKeepsSavedSessionButExpiryClearsIt() {
+        val store = MemorySessionStore().apply { write("saved-token") }
+        val worker = QueuedWorker()
+        val ui = java.util.ArrayDeque<Runnable>()
+        val account = AccountViewModel(repository, worker, java.util.concurrent.Executor { ui.add(it) }, store)
+        status = 500
+        account.restoreSession { assertFalse(it) }
+        worker.runNext(); ui.removeFirst().run()
+        assertEquals("saved-token", store.read())
+        assertTrue(account.hasSavedSession)
+        status = 401
+        account.restoreSession(force = true) { assertFalse(it) }
+        worker.runNext(); ui.removeFirst().run()
+        assertNull(store.read())
+        assertFalse(account.hasSavedSession)
+        worker.shutdownNow()
+    }
+
+    @Test
+    fun patchesProfileWithAuthenticationAndOptionalFieldsCanBeCleared() {
+        body = """{"id":42,"name":"New Name","email":"new@example.com","loginId":"author","point":300,"region":null,"ageGroup":null}"""
+        val user = repository.updateProfile("profile-token", " New Name ", "new@example.com", "", "")
+        assertEquals("PATCH", requestedMethod)
+        assertEquals("/api/users/me", requestedPath)
+        assertEquals("Bearer profile-token", authorization)
+        assertEquals("New Name", user.name)
+        val payload = com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java)
+        assertEquals("New Name", payload.get("name").asString)
+        assertTrue(payload.get("region").isJsonNull)
+        assertTrue(payload.get("ageGroup").isJsonNull)
+        assertFalse(payload.has("point"))
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "", "new@example.com", "", "") }
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "invalid", "", "") }
+        status = 409
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "taken@example.com", "", "") }
+    }
+
+    @Test
+    fun deletesSurveyWithAuthorTokenAndPropagatesOwnershipFailure() {
+        body = """{"message":"Survey deleted"}"""
+        repository.deleteSurvey("7", "author-token")
+        assertEquals("DELETE", requestedMethod)
+        assertEquals("/api/surveys/7", requestedPath)
+        assertEquals("Bearer author-token", authorization)
+        assertEquals("", requestedBody)
+        status = 403
+        val error = assertThrows(SurveyApiException::class.java) {
+            repository.deleteSurvey("7", "other-token")
+        }
+        assertEquals(403, error.status)
+        assertThrows(IllegalArgumentException::class.java) { repository.deleteSurvey("invalid", "author-token") }
+    }
+
+    @Test
+    fun deletionOnlyCompletesAfterServerSuccessAndBlocksDuplicateRequests() {
+        val worker = QueuedWorker()
+        val ui = java.util.ArrayDeque<Runnable>()
+        val account = AccountViewModel(repository, worker, java.util.concurrent.Executor { ui.add(it) })
+        body = """{"accessToken":"author-token"}"""
+        account.login("author", "password") {}
+        worker.runNext(); ui.removeFirst().run()
+        var completed = 0
+        status = 403
+        account.deleteSurvey(SurveyItem(id = "7")) { completed++ }
+        account.deleteSurvey(SurveyItem(id = "7")) { completed++ }
+        assertTrue(account.busy)
+        worker.runNext(); ui.removeFirst().run()
+        assertEquals(0, completed)
+        assertNotNull(account.error)
+        assertFalse(account.busy)
+        status = 200
+        body = """{"message":"Survey deleted"}"""
+        account.deleteSurvey(SurveyItem(id = "7")) { completed++ }
+        worker.runNext(); ui.removeFirst().run()
+        assertEquals(1, completed)
+        assertNull(account.error)
+        worker.shutdownNow()
+    }
+
+    @Test
+    fun mapsOwnershipAndAuthenticatedProfileAndParticipationCount() {
+        body = "[$surveyJson]".replace("\"id\": 7", "\"id\": 7, \"userId\": 42, \"targetCount\": 100")
+        val survey = repository.getSurveys().single()
+        assertEquals(42, survey.userId)
+        assertEquals(100, survey.targetCount)
+        body = """{"id":42,"name":"Author","email":"author@example.com","loginId":"author","point":300}"""
+        val profile = repository.getProfile("my-token")
+        assertEquals(42, profile.id)
+        assertEquals(300, profile.point)
+        assertEquals("/api/users/me", requestedPath)
+        assertEquals("Bearer my-token", authorization)
+        body = """[{"surveyId":7},{"surveyId":8}]"""
+        assertEquals(2, repository.getParticipationCount("my-token"))
+        assertEquals("/api/users/me/responses", requestedPath)
+    }
+
+    @Test
+    fun loadsRealStatisticsWithAuthorTokenAndHandlesForbiddenAccess() {
+        body = """{"surveyId":7,"totalResponses":4,"questions":[
+            {"questionId":9,"results":[{"option":"Yes","count":3,"percentage":75},{"option":"No","count":1,"percentage":25}]},
+            {"questionId":10,"results":[{"option":"Convenient","count":2,"percentage":50}]}]}"""
+        val result = repository.getResults("7", "author-token")
+        assertEquals("/api/surveys/7/results", requestedPath)
+        assertEquals("Bearer author-token", authorization)
+        assertEquals(4, result.totalResponses)
+        assertEquals(AnswerResult("Yes", 3, 75), result.questions.first().results.first())
+        assertEquals("Convenient", result.questions.last().results.single().option)
+        status = 403
+        val error = assertThrows(SurveyApiException::class.java) { repository.getResults("7", "other-token") }
+        assertEquals(403, error.status)
+    }
+
+    @Test
     fun responseSubmissionUsesActualIdsAndOptionTextAndServerPointBalance() {
         body = surveyJson
         val survey = repository.getSurvey("7")

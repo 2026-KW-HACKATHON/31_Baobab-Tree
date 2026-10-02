@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,13 +42,10 @@ import androidx.compose.ui.unit.sp
 
 private val SurveyFormBackground = Color(0xFFFDF9F1)
 private val SurveyFormGreen = Color(0xFF2F5539)
-private val SurveyFormField = Color(0xFFF4F1E9)
-private val SurveyFormBorder = Color(0x80545454)
-private val SurveyFormPlaceholder = Color(0x80545454)
-private val SurveyFormInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val SurveyFormField = Color.White
+private val SurveyFormBorder = Color(0xFFD9E0D5)
+private val SurveyFormPlaceholder = Color(0xFF6F786E)
+private val SurveyFormInter = FontFamily.SansSerif
 
 @Composable
 fun SurveyCreationStepOneScreen(
@@ -63,11 +63,11 @@ fun SurveyCreationStepOneScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(SurveyFormBackground)
+            .safeDrawingPadding().imePadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Spacer(modifier = Modifier.height(54.dp))
-            SurveyCreationHeader(onBackClick = onBackClick)
-            SurveyCreationProgress()
+            SurveyFormHeader(onBackClick = onBackClick)
+            SurveyFormProgress(currentStep = 1)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -81,7 +81,7 @@ fun SurveyCreationStepOneScreen(
                     placeholder = "설문 주제를 입력하세요. (필수)",
                     onValueChange = { title = it }
                 )
-                Spacer(modifier = Modifier.height(45.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 2,
                     label = "카테고리",
@@ -89,7 +89,7 @@ fun SurveyCreationStepOneScreen(
                     placeholder = "카테고리를 선택하십시오. (필수)",
                     onValueChange = { category = it }
                 )
-                Spacer(modifier = Modifier.height(45.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 3,
                     label = "설문 소개",
@@ -98,7 +98,7 @@ fun SurveyCreationStepOneScreen(
                     onValueChange = { introduction = it },
                     multiline = true
                 )
-                Spacer(modifier = Modifier.height(45.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 4,
                     label = "설문 대상",
@@ -106,7 +106,7 @@ fun SurveyCreationStepOneScreen(
                     placeholder = "예) 월계 1동 주민, 광운대학생 등",
                     onValueChange = { audience = it }
                 )
-                Spacer(modifier = Modifier.height(31.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 SurveyDeadlineSection(
                     value = deadline,
                     onValueChange = { deadline = it }
@@ -119,9 +119,9 @@ fun SurveyCreationStepOneScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp)
-                .padding(bottom = 45.dp)
+                .padding(bottom = 16.dp)
                 .height(55.dp)
-                .background(SurveyFormGreen, RoundedCornerShape(40.dp))
+                .background(SurveyFormGreen, RoundedCornerShape(16.dp))
                 .clickable {
                     onNextClick(
                         SurveyDraftStepOne(
@@ -138,7 +138,7 @@ fun SurveyCreationStepOneScreen(
             Text(
                 text = "다음 단계로",
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = 17.sp,
                 lineHeight = 24.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = SurveyFormInter,
@@ -155,118 +155,6 @@ data class SurveyDraftStepOne(
     val audience: String,
     val deadline: String
 )
-
-@Composable
-private fun SurveyCreationHeader(onBackClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 16.dp)
-                .clickable(onClick = onBackClick),
-            horizontalArrangement = Arrangement.spacedBy((-8).dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = "뒤로가기",
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = null,
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-        Text(
-            text = "설문 작성하기",
-            modifier = Modifier.align(Alignment.Center),
-            color = Color.Black,
-            fontFamily = SurveyFormInter,
-            fontSize = 23.sp,
-            lineHeight = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun SurveyCreationProgress() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(81.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(horizontal = 57.dp)
-                .fillMaxWidth()
-                .padding(top = 34.dp)
-                .height(2.dp)
-                .background(Color(0x80545454))
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 27.dp,
-                    end = 27.dp,
-                    top = 20.dp
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            ProgressStep(number = "1", label = "기본 정보", active = true)
-            ProgressStep(number = "2", label = "문항 작성")
-            ProgressStep(number = "3", label = "설문 설정")
-        }
-    }
-}
-
-@Composable
-private fun ProgressStep(number: String, label: String, active: Boolean = false) {
-    Column(
-        modifier = Modifier.width(60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .background(
-                    color = if (active) SurveyFormGreen else Color(0xFFA8A8A8),
-                    shape = RoundedCornerShape(50)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = number,
-                color = Color.White,
-                fontFamily = SurveyFormInter,
-                fontSize = 23.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-        Text(
-            text = label,
-            modifier = Modifier.padding(top = 4.dp),
-            color = if (active) SurveyFormGreen else Color(0xFF9E9E9E),
-            fontFamily = SurveyFormInter,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
-    }
-}
 
 @Composable
 private fun SurveyFieldSection(
@@ -309,7 +197,7 @@ private fun SurveyInput(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(if (multiline) 100.dp else 40.dp),
+            .heightIn(min = if (multiline) 120.dp else 52.dp),
         singleLine = !multiline,
         textStyle = TextStyle(
             color = Color.Black,
@@ -323,7 +211,7 @@ private fun SurveyInput(
                     .fillMaxSize()
                     .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))
                     .background(SurveyFormField, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 9.dp, vertical = if (multiline) 9.dp else 0.dp),
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart
             ) {
                 if (value.isEmpty()) {

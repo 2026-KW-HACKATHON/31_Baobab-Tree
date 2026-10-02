@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,9 +60,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 private val SearchScreenBackground = Color(0xFFFDF9F1)
 private val SearchFieldBackground = Color(0xFFF4F1E9)
 private val SearchGreen = Color(0xFF2F5539)
-private val SearchMuted = Color(0x80545454)
+private val SearchMuted = Color(0xFF697369)
 //private val SearchInterBold = FontFamily(Font(R.font.inter_variable, weight = FontWeight.Bold))
-private val SearchInterBold = FontFamily.Default
+private val SearchInterBold = FontFamily.SansSerif
 private data class SearchCategoryOption(
     val label: String
 )
@@ -99,9 +103,10 @@ fun SearchResultsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(SearchScreenBackground)
+            .safeDrawingPadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Spacer(modifier = Modifier.height(44.dp))
+
             SearchField(
                 value = searchQuery,
                 onValueChange = {
@@ -122,16 +127,16 @@ fun SearchResultsScreen(
                 emptyMessage = "검색 결과가 없습니다."
             ) { items ->
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Adaptive(156.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(bottom = 0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    contentPadding = PaddingValues(bottom = 124.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(items, key = { it.id }) { survey ->
-                        SurveyResultCard(
+                        SurveyFeedCard(
                             survey = survey,
                             onClick = {
                                 onSurveyClick(survey)
@@ -207,15 +212,14 @@ private fun SearchCategoryBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .clipToBounds()
+
     ) {
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .horizontalScroll(rememberScrollState())
                 .padding(start = 16.dp, top = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SearchCategories.forEach { category ->
@@ -249,111 +253,18 @@ private fun SearchCategoryBar(
 }
 
 @Composable
-private fun SurveyResultCard(
-    survey: SurveyItem,
-    onClick: () -> Unit
-) {
-    val cardShape = RoundedCornerShape(10.dp)
-
-    Box(
-        modifier = Modifier
-            .size(180.dp)
-            .shadow(2.dp, cardShape)
-            .clip(cardShape)
-            .background(Color.White)
-            .clickable(onClick = onClick)
-    ) {
-        Image(
-            painter = painterResource(survey.imageRes),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 5.dp)
-                .size(width = 170.dp, height = 85.dp)
-                .clip(RoundedCornerShape(10.dp))
-        )
-        Text(
-            text = survey.title,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 105.dp)
-                .size(width = 160.dp, height = 36.dp),
-            color = Color.Black,
-            fontFamily = SearchInterBold,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 18.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Clip
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 157.dp)
-                .width(160.dp)
-                .height(13.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = survey.author,
-                modifier = Modifier.width(75.dp),
-                color = Color(0xFF545454),
-                fontFamily = SearchInterBold,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = survey.points,
-                modifier = Modifier.width(75.dp),
-                color = SearchGreen,
-                fontFamily = SearchInterBold,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 13.sp,
-                textAlign = TextAlign.End,
-                maxLines = 1
-            )
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 75.dp)
-                .clip(CircleShape)
-                .background(survey.badgeColor)
-                .border(2.dp, Color.White, CircleShape)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = survey.category,
-                color = survey.badgeTextColor,
-                fontFamily = SearchInterBold,
-                fontSize = survey.badgeFontSize.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
 private fun SearchFloatingActions(
     onMyClick: () -> Unit,
     onCreateSurveyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(end = 3.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        modifier = modifier.padding(end = 16.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(SearchGreen)
                 .clickable(onClick = onMyClick),
@@ -366,16 +277,14 @@ private fun SearchFloatingActions(
         }
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(SearchGreen)
                 .clickable(onClick = onCreateSurveyClick),
             contentAlignment = Alignment.Center
         ) {
-            SvgAsset(
-                assetName = "search_add_icon.svg",
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(Icons.Outlined.Edit, contentDescription = "설문 만들기",
+                tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }

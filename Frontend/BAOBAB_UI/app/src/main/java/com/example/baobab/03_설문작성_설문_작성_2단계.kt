@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,14 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val QuestionBackground = Color(0xFFFDF9F1)
-private val QuestionSurface = Color(0xFFF4F1E9)
+private val QuestionSurface = Color.White
 private val QuestionGreen = Color(0xFF2F5539)
-private val QuestionBorder = Color(0x80545454)
+private val QuestionBorder = Color(0xFFD9E0D5)
 private val QuestionMuted = Color(0xFF545454)
-private val QuestionInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val QuestionInter = FontFamily.SansSerif
 
 @Composable
 fun SurveyCreationStepTwoScreen(
@@ -74,10 +74,10 @@ fun SurveyCreationStepTwoScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(QuestionBackground)
+            .safeDrawingPadding().imePadding()
     ) {
-        Spacer(modifier = Modifier.height(54.dp))
-        QuestionHeader(onBackClick = onBackClick)
-        QuestionProgress()
+        SurveyFormHeader(onBackClick = onBackClick)
+        SurveyFormProgress(currentStep = 2)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -146,122 +146,6 @@ class SurveyQuestionDraft(
 enum class SurveyQuestionType {
     MULTIPLE_CHOICE,
     SHORT_ANSWER
-}
-
-@Composable
-private fun QuestionHeader(onBackClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 16.dp)
-                .clickable(onClick = onBackClick),
-            horizontalArrangement = Arrangement.spacedBy((-8).dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = "뒤로가기",
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-            Icon(
-                imageVector = Icons.Outlined.ChevronLeft,
-                contentDescription = null,
-                tint = Color.Black,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-        Text(
-            text = "설문 작성하기",
-            modifier = Modifier.align(Alignment.Center),
-            color = Color.Black,
-            fontFamily = QuestionInter,
-            fontSize = 23.sp,
-            lineHeight = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun QuestionProgress() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(81.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 72.dp, top = 34.dp)
-                .width(114.dp)
-                .height(2.dp)
-                .background(QuestionGreen)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 216.dp, top = 34.dp)
-                .width(114.dp)
-                .height(2.dp)
-                .background(QuestionBorder)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 27.dp,
-                    end = 27.dp,
-                    top = 20.dp
-                ),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            ProgressStep(number = "1", label = "기본 정보", active = true)
-            ProgressStep(number = "2", label = "문항 작성", active = true)
-            ProgressStep(number = "3", label = "설문 설정")
-        }
-    }
-}
-
-@Composable
-private fun ProgressStep(number: String, label: String, active: Boolean = false) {
-    Column(
-        modifier = Modifier.width(60.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(50))
-                .background(if (active) QuestionGreen else Color(0xFFA8A8A8)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = number,
-                color = Color.White,
-                fontFamily = QuestionInter,
-                fontSize = 23.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Text(
-            text = label,
-            modifier = Modifier.padding(top = 4.dp),
-            color = if (active) QuestionGreen else Color(0xFFA8A8A8),
-            fontFamily = QuestionInter,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
-    }
 }
 
 @Composable
@@ -547,7 +431,7 @@ private fun QuestionCardContainer(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(height)
+            .heightIn(min = height)
             .clip(RoundedCornerShape(20.dp))
             .background(QuestionSurface)
             .border(1.dp, QuestionBorder, RoundedCornerShape(20.dp)),
@@ -563,6 +447,7 @@ private fun NewQuestionButton(onClick: () -> Unit) {
             .height(50.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(QuestionBackground)
+            .safeDrawingPadding().imePadding()
             .border(1.dp, QuestionBorder, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp),
@@ -601,7 +486,7 @@ private fun QuestionBottomActions(
                 .height(94.dp)
                 .padding(horizontal = 20.dp)
         ) {
-            Box(modifier = Modifier.width(182.dp).height(94.dp)) {
+            Box(modifier = Modifier.weight(1f).height(94.dp)) {
                 ActionButton(
                     text = "다음 페이지 생성",
                     outlined = true,
@@ -614,7 +499,7 @@ private fun QuestionBottomActions(
                 )
             }
             Spacer(modifier = Modifier.width(10.dp))
-            Box(modifier = Modifier.width(170.dp).height(94.dp)) {
+            Box(modifier = Modifier.weight(1f).height(94.dp)) {
                 ActionButton(
                     text = "다음 단계로",
                     outlined = false,
@@ -640,9 +525,9 @@ private fun ActionButton(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(40.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(if (outlined) QuestionBackground else QuestionGreen)
-            .border(1.dp, QuestionGreen, RoundedCornerShape(40.dp))
+            .border(1.dp, QuestionGreen, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -650,7 +535,7 @@ private fun ActionButton(
             text = text,
             color = if (outlined) QuestionGreen else Color.White,
             fontFamily = QuestionInter,
-            fontSize = 20.sp,
+            fontSize = 17.sp,
             lineHeight = 24.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,

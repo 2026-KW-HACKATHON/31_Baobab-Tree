@@ -8,7 +8,7 @@ import androidx.lifecycle.ViewModel
 
 enum class BaobabScreen {
     LOGIN, START, HOME, SEARCH, DETAIL, PARTICIPATE, SURVEY_COMPLETE,
-    CREATE_ONE, CREATE_TWO, CREATE_THREE, CREATE_COMPLETE, MY
+    CREATE_ONE, CREATE_TWO, CREATE_THREE, CREATE_COMPLETE, MY, POINTS
 }
 
 class SurveyCreationState {
@@ -27,6 +27,7 @@ class SurveyCreationState {
     var rewardPerPerson by mutableStateOf("100P")
     var rewardRecipients by mutableStateOf("10명")
     var selectedDuration by mutableStateOf("5분 이하")
+    var imageData by mutableStateOf<String?>(null)
 }
 
 data class SurveyQuestionSnapshot(
@@ -106,7 +107,7 @@ class BaobabViewModel : ViewModel() {
                     it.type, it.title, it.required, it.selectedOptionIndex, it.options.toList()
                 )
             },
-            settings = settings
+            settings = settings.copy(imageData = creationState.imageData)
         )
     fun completeCreation(settings: SurveySettingsDraft) = completeCreation(snapshotDraft(settings))
 

@@ -1,8 +1,12 @@
 package com.example.baobab
 
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.URI
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -21,7 +25,53 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             "surveyApiBaseUrl must be an HTTP(S) API URL"
         }
     }
-    private val gson = Gson()
+    private val gson = GsonBuilder().serializeNulls().create()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .retryOnConnectionFailure(false)
+        .build()
+
+    fun deleteSurvey(id: String, token: String) {
+        require(id.toIntOrNull()?.let { it > 0 } == true)
+        request("surveys/$id", token = token, method = "DELETE")
+    }
+
+    fun getProfile(token: String): UserProfile = parse {
+        gson.fromJson(request("users/me", token = token), UserProfile::class.java)
+            .also { require(it.id > 0 && it.name.isNotBlank() && it.point >= 0) }
+    }
+
+    fun updateProfile(token: String, name: String, email: String, region: String, ageGroup: String): UserProfile = parse {
+        if (name.isBlank()) throw SurveyApiException("이름을 입력해주세요.")
+        if (!Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim()))
+            throw SurveyApiException("이메일 형식을 확인해주세요.")
+        val payload = mapOf("name" to name.trim(), "email" to email.trim(),
+            "region" to region.trim().ifEmpty { null }, "ageGroup" to ageGroup.trim().ifEmpty { null })
+        gson.fromJson(request("users/me", payload, token, method = "PATCH"), UserProfile::class.java)
+            .also { require(it.id > 0 && it.name.isNotBlank()) }
+    }
+
+    fun getParticipationCount(token: String): Int = parse {
+        gson.fromJson(request("users/me/responses", token = token), com.google.gson.JsonArray::class.java).size()
+    }
+
+    fun getParticipations(token: String): List<ParticipationHistory> = parse {
+        gson.fromJson(request("users/me/responses", token = token), Array<ParticipationDto>::class.java)
+            .map { record ->
+                ParticipationHistory(record.id, record.survey.id.toString(), record.survey.title,
+                    record.survey.category ?: "미분류", record.survey.rewardPoint, record.createdAt,
+                    record.answers.map { AnswerHistory(it.question.question, it.answer) })
+            }
+    }
+
+    fun getResults(id: String, token: String): SurveyResults = parse {
+        require(id.toIntOrNull()?.let { it > 0 } == true)
+        gson.fromJson(request("surveys/$id/results", token = token), SurveyResults::class.java)
+            .also { require(it.surveyId.toString() == id && it.totalResponses >= 0) }
+    }
 
     fun login(loginId: String, password: String): String = parse {
         val response = gson.fromJson(request("auth/login", mapOf("loginId" to loginId.trim(), "password" to password)), com.google.gson.JsonObject::class.java)
@@ -70,37 +120,35 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
 
     private fun get(path: String): String = request(path)
 
-    private fun request(path: String, body: Any? = null, token: String? = null): String {
-        val connection = base.resolve(path).toURL().openConnection() as HttpURLConnection
+    private fun request(path: String, body: Any? = null, token: String? = null,
+        method: String = if (body == null) "GET" else "POST"): String {
         try {
-            connection.requestMethod = if (body == null) "GET" else "POST"
-            connection.connectTimeout = 8_000
-            connection.readTimeout = 8_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json")
-            if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.outputStream.use { it.write(gson.toJson(body).toByteArray(Charsets.UTF_8)) }
-            }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                throw SurveyApiException(when (status) {
-                    401 -> if (path == "auth/login") "아이디와 비밀번호를 확인해주세요." else "로그인이 만료되었습니다. 다시 로그인해주세요."
-                    409 -> if (path.endsWith("/responses")) "이미 참여한 설문입니다." else "이미 사용 중인 아이디 또는 이메일입니다."
-                    400 -> if (path.endsWith("/responses")) "설문이 마감되었거나 모집 인원이 찼을 수 있습니다. 설문 정보와 답변을 확인해주세요." else "입력 내용을 확인해주세요."
-                    404 -> "설문을 찾을 수 없습니다."
-                    else -> "요청에 실패했습니다. 잠시 후 다시 시도해주세요."
-                }, status)
-            }
-            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val payload = body?.let { gson.toJson(it).toRequestBody("application/json; charset=utf-8".toMediaType()) }
+            val builder = Request.Builder().url(base.resolve(path).toString()).header("Accept", "application/json")
+                .method(method, payload)
+            if (token != null) builder.header("Authorization", "Bearer $token")
+            client.newCall(builder.build()).execute().use { response ->
+                val status = response.code
+                if (status !in 200..299) {
+                    throw SurveyApiException(when (status) {
+                        401 -> if (path == "auth/login") "아이디와 비밀번호를 확인해주세요." else "로그인이 만료되었습니다. 다시 로그인해주세요."
+                        409 -> when {
+                            path.endsWith("/responses") -> "이미 참여한 설문입니다."
+                            path == "users/me" -> "이미 사용 중인 이메일입니다."
+                            else -> "이미 사용 중인 아이디 또는 이메일입니다."
+                        }
+                        400 -> if (path.endsWith("/responses")) "설문이 마감되었거나 모집 인원이 찼을 수 있습니다. 설문 정보와 답변을 확인해주세요." else "입력 내용을 확인해주세요."
+                        404 -> "설문을 찾을 수 없습니다."
+                        403 -> "내가 만든 설문에만 접근할 수 있습니다."
+                        else -> "요청에 실패했습니다. 잠시 후 다시 시도해주세요."
+                    }, status)
+                }
+                return response.body.string()
+                }
         } catch (error: SurveyApiException) {
             throw error
         } catch (error: IOException) {
             throw SurveyApiException("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.")
-        } finally {
-            connection.disconnect()
         }
     }
 
@@ -122,15 +170,17 @@ private data class OptionDto(val id: Int? = null, val optionText: String? = null
 }
 private data class QuestionDto(
     val id: Int? = null, val question: String? = null,
-    val questionType: String? = null, val options: List<OptionDto>? = null
+    val questionType: String? = null, val options: List<OptionDto>? = null, val required: Boolean? = null
 ) {
     fun toQuestion(): SurveyQuestion {
         require(id != null && id > 0 && !question.isNullOrBlank() && !questionType.isNullOrBlank())
-        return SurveyQuestion(id, question, questionType, requireNotNull(options).map { it.toOption() })
+        return SurveyQuestion(id, question, questionType, requireNotNull(options).map { it.toOption() }, required ?: true)
     }
 }
 private data class SurveyDto(
     val id: Int? = null, val title: String? = null, val category: String? = null,
+    val userId: Int? = null, val targetCount: Int? = null,
+    val description: String? = null, val audience: String? = null, val duration: String? = null, val imageData: String? = null,
     val author: AuthorDto? = null, val rewardPoint: Int? = null,
     val currentCount: Int? = null, val endDate: String? = null,
     val status: String? = null, val questions: List<QuestionDto>? = null
@@ -148,7 +198,15 @@ private data class SurveyDto(
                 OffsetDateTime.parse(it).atZoneSameInstant(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("yyyy. MM. dd."))
             },
-            questionCount = questionItems.size, questions = questionItems
+            questionCount = questionItems.size, questions = questionItems,
+            userId = userId, targetCount = targetCount,
+            description = description, audience = audience, duration = duration, imageData = imageData
         )
     }
 }
+
+private data class ParticipationDto(val id: Int, val createdAt: String, val survey: HistorySurveyDto,
+    val answers: List<HistoryAnswerDto>)
+private data class HistorySurveyDto(val id: Int, val title: String, val category: String?, val rewardPoint: Int)
+private data class HistoryAnswerDto(val answer: String, val question: HistoryQuestionDto)
+private data class HistoryQuestionDto(val question: String)

@@ -25,6 +25,7 @@ fun surveyPayload(draft: CompletedSurveyDraft): Map<String, Any?> {
             "${index + 1}번 질문에 서로 다른 선택지를 두 개 이상 입력해주세요."
         }
         mapOf("question" to question.title.trim(), "questionType" to if (single) "single" else "short",
+            "required" to question.required,
             "options" to options.map { mapOf("optionText" to it) })
     }
     val date = draft.basicInfo.deadline.trim().takeIf { it.isNotEmpty() }?.let {
@@ -36,6 +37,9 @@ fun surveyPayload(draft: CompletedSurveyDraft): Map<String, Any?> {
         } catch (_: Exception) { throw IllegalArgumentException("마감일을 yyyy. MM. dd. 형식으로 입력해주세요.") }
     }
     return mapOf("title" to draft.basicInfo.title.trim(), "category" to draft.basicInfo.category.trim().ifEmpty { null },
+        "description" to draft.basicInfo.introduction.trim().ifEmpty { null },
+        "audience" to draft.basicInfo.audience.trim().ifEmpty { null },
+        "duration" to draft.settings.duration.trim().ifEmpty { null }, "imageData" to draft.settings.imageData,
         "rewardPoint" to number(draft.settings.rewardPerPerson, "P"),
         "targetCount" to number(draft.settings.rewardRecipients, "명"), "endDate" to date, "questions" to questions)
 }
@@ -43,7 +47,8 @@ fun surveyPayload(draft: CompletedSurveyDraft): Map<String, Any?> {
 class AccountViewModel(
     private val repository: HttpSurveyRepository = HttpSurveyRepository(BuildConfig.SURVEY_API_BASE_URL),
     private val worker: ExecutorService = Executors.newSingleThreadExecutor(),
-    private val uiExecutor: Executor = Executor { Handler(Looper.getMainLooper()).post(it) }
+    private val uiExecutor: Executor = Executor { Handler(Looper.getMainLooper()).post(it) },
+    private val sessionStore: SessionStore = MemorySessionStore()
 ) : ViewModel() {
     private val closed = AtomicBoolean(false)
     var token by mutableStateOf<String?>(null); private set
@@ -52,8 +57,19 @@ class AccountViewModel(
     var point by mutableStateOf<Int?>(null); private set
     var participationResult by mutableStateOf<ParticipationResult?>(null); private set
     var participationNotice by mutableStateOf<String?>(null); private set
+    var sessionChecked by mutableStateOf(false); private set
+    var hasSavedSession by mutableStateOf(false); private set
+    fun invalidateSession() { token = null; sessionStore.clear(); hasSavedSession = false }
     fun dismissParticipationNotice() { participationNotice = null }
     fun clearError() { error = null }
+    fun logout() {
+        if (busy) return
+        invalidateSession()
+        point = null
+        error = null
+        participationResult = null
+        participationNotice = null
+    }
 
     private fun <T> runRequest(action: () -> T, success: (T) -> Unit, failure: (String) -> Unit = {}) {
         if (busy || closed.get()) return
@@ -65,7 +81,7 @@ class AccountViewModel(
                 if (!closed.get()) {
                     busy = false
                     result.fold(success) {
-                        if (it is SurveyApiException && it.status == 401) token = null
+                        if (it is SurveyApiException && it.status == 401) invalidateSession()
                         error = it.message ?: "요청에 실패했습니다. 다시 시도해주세요."
                         failure(requireNotNull(error))
                     }
@@ -75,7 +91,25 @@ class AccountViewModel(
     }
 
     fun login(id: String, password: String, success: () -> Unit) = runRequest(
-        { repository.login(id, password) }, { token = it; point = null; participationResult = null; success() })
+        { repository.login(id, password).also { sessionStore.write(it) } },
+        { token = it; hasSavedSession = true; sessionChecked = true; point = null; participationResult = null; success() })
+
+    fun restoreSession(force: Boolean = false, ready: (Boolean) -> Unit) {
+        if (sessionChecked && !force) { ready(token != null); return }
+        runRequest({
+            val saved = sessionStore.read()
+            saved?.let { it to repository.getProfile(it) }
+        }, { restored ->
+            sessionChecked = true
+            token = restored?.first; point = restored?.second?.point
+            hasSavedSession = restored != null
+            ready(restored != null)
+        }, {
+            sessionChecked = true
+            hasSavedSession = sessionStore.read() != null
+            ready(false)
+        })
+    }
 
     fun signup(name: String, email: String, id: String, password: String, success: () -> Unit) = runRequest({
         repository.signup(name, email, id, password)
@@ -87,6 +121,11 @@ class AccountViewModel(
             surveyPayload(draft)
             repository.createSurvey(draft, credential)
         }, { success() })
+    }
+
+    fun deleteSurvey(survey: SurveyItem, success: () -> Unit) {
+        val credential = token ?: run { error = "설문 삭제에는 로그인이 필요합니다."; return }
+        runRequest({ repository.deleteSurvey(survey.id, credential) }, { success() })
     }
 
     fun participate(survey: SurveyItem, answers: Map<Int, String>, success: () -> Unit) {

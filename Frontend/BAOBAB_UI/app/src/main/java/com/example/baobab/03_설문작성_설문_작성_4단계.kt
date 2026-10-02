@@ -1,5 +1,9 @@
 package com.example.baobab
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material3.Button
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -31,104 +38,40 @@ import androidx.compose.ui.unit.sp
 private val CreationCompleteBackground = Color(0xFFFDF9F1)
 private val CreationCompleteGreen = Color(0xFF2F5539)
 private val CreationCompleteGray = Color(0xCC545454)
-private val CreationCompleteInter = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+private val CreationCompleteInter = FontFamily.SansSerif
 
 @Composable
-fun SurveyCreationCompleteScreen(
-    onHomeClick: () -> Unit = {}
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CreationCompleteBackground)
+fun SurveyCreationCompleteScreen(onHomeClick: () -> Unit = {}) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(CreationCompleteBackground)
+            .safeDrawingPadding().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Image(
-            painter = painterResource(R.drawable.survey_creation_complete),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = 108.dp)
-                .size(370.dp)
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = 478.dp)
-                .fillMaxWidth()
-                .height(80.dp)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "설문이 등록되었어요!",
-                color = Color.Black,
-                fontFamily = CreationCompleteInter,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 36.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-
         Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(y = 558.dp)
-                .fillMaxWidth()
-                .height(90.dp)
-                .padding(top = 10.dp, bottom = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "다양한 사람들의 소중한 의견이",
-                color = CreationCompleteGray,
-                fontFamily = CreationCompleteInter,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Normal,
-                lineHeight = 24.sp,
-                textAlign = TextAlign.Center
+            Image(
+                painter = painterResource(R.drawable.survey_creation_complete),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth(0.8f).aspectRatio(1f)
             )
-            Text(
-                text = "모이길 기다려주세요.",
-                color = CreationCompleteGray,
-                fontFamily = CreationCompleteInter,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Normal,
-                lineHeight = 24.sp,
-                textAlign = TextAlign.Center
-            )
+            Text("설문이 등록되었어요!", color = CreationCompleteGreen,
+                fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(top = 24.dp))
+            Text("다양한 사람들의 소중한 의견을 기다려보세요.",
+                color = CreationCompleteGray, fontSize = 16.sp, lineHeight = 24.sp,
+                textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
         }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 45.dp)
-                .height(55.dp)
-                .background(CreationCompleteGreen, RoundedCornerShape(40.dp))
-                .clickable(onClick = onHomeClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "홈 화면으로 돌아가기",
-                color = Color.White,
-                fontFamily = CreationCompleteInter,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 24.sp,
-                textAlign = TextAlign.Center
-            )
+        Button(onClick = onHomeClick, modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp)) {
+            Text("홈 화면으로 돌아가기", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
-
 @Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
 private fun SurveyCreationCompletePreview() {

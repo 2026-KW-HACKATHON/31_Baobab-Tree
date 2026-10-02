@@ -8,6 +8,7 @@
     "db:seed:examples": "node scripts/seed-examples.js",
     "test": "node --test test/*.test.js",
     "db:generate": "prisma generate",
+    "db:migrate:survey-fields": "node scripts/migrate-survey-fields.js",
     "db:validate": "prisma validate",
     "db:push": "prisma db push",
     "postinstall": "prisma generate"

@@ -1,11 +1,13 @@
 package com.example.baobab
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,68 +17,57 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Business
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PieChartOutline
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.School
-import androidx.compose.material.icons.outlined.SportsSoccer
-import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.text.withStyle
+
 
 private val HomeBackground = Color(0xFFFDF9F1)
-private val HeaderSurface = Color(0xFFFEFBF8)
-private val InputSurface = Color(0xFFF4F1E9)
-private val BaobabGreen = Color(0xFF2D4F37)
-private val MutedText = Color(0x80000000)
+private val HomeGreen = Color(0xFF2F5539)
+private val HomeMuted = Color(0xFF454545)
+private val HomeFont = FontFamily.SansSerif
 
 private data class HomeCategory(
-    val label: String,
-    val color: Color,
-    val icon: ImageVector,
-    val selected: Boolean = false
+    val label: String
+)
+
+private val HomeCategories = listOf(
+    HomeCategory("전체"),
+    HomeCategory("생활·편의"),
+    HomeCategory("지역·사회"),
+    HomeCategory("교육·학습"),
+    HomeCategory("문화·스포츠"),
+    HomeCategory("경제·상권"),
+    HomeCategory("건강·의료")
 )
 
 @Composable
@@ -85,423 +76,245 @@ fun HomeScreen(
     onSearchClick: (String) -> Unit = {},
     onCreateSurveyClick: () -> Unit = {},
     onMyClick: () -> Unit = {},
+    onPointClick: () -> Unit = {},
     searchTerm: String = "",
     onSearchTermChange: (String) -> Unit = {},
     surveys: List<SurveyItem> = emptyList(),
     loading: Boolean = false,
     error: String? = null,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    currentPoint: Int? = null,
+    loggedIn: Boolean = false
 ) {
-    var selectedCategory by rememberSaveable { mutableIntStateOf(0) }
-    var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
-    val categories = remember {
-        listOf(
-            HomeCategory("전체", Color(0xFFDFC27D), Icons.Outlined.PieChartOutline, true),
-            HomeCategory("생활·편의", Color(0xFFCEE0D0), Icons.Outlined.ShoppingCart),
-            HomeCategory("지역·사회", Color(0xFFC9D7ED), Icons.Outlined.Groups),
-            HomeCategory("교육·학습", Color(0xFFFCDCC5), Icons.Outlined.School),
-            HomeCategory("경제·상권", Color(0xFFCEB8EC), Icons.Outlined.Business),
-            HomeCategory("문화·스포츠", Color(0xFFB9B6B6), Icons.Outlined.SportsSoccer),
-            HomeCategory("건강·의료", Color(0xFFE196CE), Icons.Outlined.Person)
-        )
+    var selectedCategory by rememberSaveable { mutableStateOf("전체") }
+    val visibleSurveys = if (selectedCategory == "전체") {
+        surveys
+    } else {
+        surveys.filter { it.category == selectedCategory }
     }
-    val visibleSurveys = surveys.filter { selectedCategory == 0 || it.category == categories[selectedCategory].label }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(HomeBackground)
+            .safeDrawingPadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Spacer(modifier = Modifier.height(44.dp))
-            HomeHeader(onMyClick = onMyClick)
-            SearchBar(
-                value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
-                    onSearchTermChange(it)
-                },
-                onClick = { onSearchClick(searchQuery) }
-            )
-            CategoryRow(
-                categories = categories,
-                selectedIndex = selectedCategory,
+            HomeHeader(onMyClick = onMyClick, onPointClick = onPointClick, currentPoint = currentPoint, loggedIn = loggedIn)
+            HomeCategoryBar(
+                selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
             )
             SurveyRequestContent(
                 loading = loading, error = error, data = visibleSurveys, onRetry = onRetry,
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) { items ->
-                SurveyList(surveys = items, onSurveyClick = onSurveyClick, modifier = Modifier.fillMaxSize())
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(156.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(bottom = 124.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(items, key = { it.id }) { survey ->
+                        SurveyFeedCard(survey = survey, onClick = { onSurveyClick(survey) })
+                    }
+                }
             }
         }
-
-        HomeBottomBar(
-            onSearchClick = { onSearchClick(searchQuery) },
+        HomeFloatingActions(
+            onSearchClick = { onSearchClick(searchTerm) },
             onCreateSurveyClick = onCreateSurveyClick,
-            onMyClick = onMyClick,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier.align(Alignment.BottomEnd)
         )
     }
 }
 
 @Composable
-private fun HomeHeader(onMyClick: () -> Unit) {
+private fun HomeHeader(onMyClick: () -> Unit, onPointClick: () -> Unit, currentPoint: Int?, loggedIn: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BaobabLogo(modifier = Modifier.weight(1f))
+        Text(
+            text = if (!loggedIn) "로그인" else currentPoint?.let { "%,d P".format(it) } ?: "— P",
+            modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFE9DBB8)).clickable(onClick = onPointClick)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = HomeGreen,
+            maxLines = 1
+        )
+        IconButton(onClick = onMyClick, modifier = Modifier.size(48.dp)
+            .padding(start = 4.dp))
+        {
+            Icon(Icons.Outlined.Person, contentDescription = "마이페이지", modifier = Modifier.size(28.dp), tint = HomeGreen)
+        }
+    }
+}
+
+@Composable
+private fun HomeCategoryBar(
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(66.dp)
-            .padding(horizontal = 15.dp)
+
     ) {
-        BaobabLogo(
+        Row(
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = 1.dp, y = (-1.dp))
-        )
-        Icon(
-            imageVector = Icons.Outlined.NotificationsNone,
-            contentDescription = "알림",
-            tint = Color.Black,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .offset(x = (-50).dp)
-                .size(35.dp)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .size(40.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFFE3E3E3))
-                .border(1.dp, Color(0xFF545454), RoundedCornerShape(50))
-                .clickable(onClick = onMyClick),
-            contentAlignment = Alignment.Center
+                .align(Alignment.TopStart)
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 15.dp, end = 17.dp, top = 5.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Outlined.AccountCircle,
-                contentDescription = "내 프로필",
-                tint = Color.White,
-                modifier = Modifier.size(30.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun BaobabLogo(modifier: Modifier = Modifier) {
-    val logo = buildAnnotatedString {
-        withStyle(SpanStyle(color = BaobabGreen)) { append("BA") }
-        withStyle(SpanStyle(color = Color(0xFF563C28))) { append("OB") }
-        withStyle(SpanStyle(color = BaobabGreen)) { append("AB") }
-    }
-
-    Text(
-        text = logo,
-        modifier = modifier.width(150.dp),
-        fontFamily = FontFamily(Font(R.font.jaro_regular)),
-        fontSize = 35.sp,
-        lineHeight = 35.sp,
-        textAlign = TextAlign.Start
-    )
-}
-
-@Composable
-private fun SearchBar(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onClick: () -> Unit
-) {
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 17.5.dp, end = 14.5.dp)
-            .height(60.dp),
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onClick() }),
-        textStyle = TextStyle(
-            color = Color.Black,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        ),
-        decorationBox = { innerTextField ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .offset(y = 9.5.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(InputSurface)
-                    .padding(horizontal = 15.5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = "검색",
-                    tint = Color(0x4D000000),
-                    modifier = Modifier.size(20.dp).clickable(onClick = onClick)
-                )
-                Spacer(modifier = Modifier.width(12.6.dp))
-                if (value.isEmpty()) {
+            HomeCategories.forEach { category ->
+                val selected = category.label == selectedCategory
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (selected) HomeGreen else Color(0x0D545454))
+                        .then(
+                            if (selected) Modifier.border(1.dp, Color.White, CircleShape)
+                            else Modifier
+                        )
+                        .clickable { onCategorySelected(category.label) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = "검색",
-                        color = Color(0x96000000),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        text = category.label,
+                        color = if (selected) Color.White else HomeMuted,
+                        fontFamily = HomeFont,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 18.sp,
+                        maxLines = 1
                     )
                 }
-                innerTextField()
             }
         }
-    )
-}
-
-@Composable
-private fun CategoryRow(
-    categories: List<HomeCategory>,
-    selectedIndex: Int,
-    onCategorySelected: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(125.dp)
-            .horizontalScroll(rememberScrollState())
-            .padding(start = 16.dp, top = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(15.9.dp)
-    ) {
-        categories.forEachIndexed { index, category ->
-            CategoryItem(
-                category = category.copy(selected = index == selectedIndex),
-                onClick = { onCategorySelected(index) }
-            )
-        }
     }
 }
 
 @Composable
-private fun CategoryItem(
-    category: HomeCategory,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(70.dp)
-            .height(100.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(50))
-                .background(category.color)
-                .border(1.dp, Color(0xFF545454), RoundedCornerShape(50)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = category.icon,
-                contentDescription = category.label,
-                tint = Color(0xFF737373),
-                modifier = Modifier.size(30.dp)
-            )
-        }
-        Text(
-            text = category.label,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 5.dp),
-            color = if (category.selected) Color.Black else MutedText,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun SurveyList(
-    surveys: List<SurveyItem>,
-    onSurveyClick: (SurveyItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 0.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item { Spacer(modifier = Modifier.height(0.dp)) }
-        items(surveys, key = { it.id }) { survey ->
-            SurveyCard(
-                survey = survey,
-                onClick = { onSurveyClick(survey) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun SurveyCard(
+fun SurveyFeedCard(
     survey: SurveyItem,
     onClick: () -> Unit
 ) {
-    Row(
+    val shape = RoundedCornerShape(18.dp)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(195.dp)
-            .shadow(4.dp, RoundedCornerShape(10.dp))
-            .clip(RoundedCornerShape(10.dp))
+            .shadow(2.dp, shape)
+            .clip(shape)
             .background(Color.White)
             .clickable(onClick = onClick)
-            .padding(start = 9.dp, top = 7.5.dp, bottom = 7.5.dp, end = 10.dp)
+            .padding(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .width(100.dp)
-                .fillMaxSize()
-                .background(Color(0xFFE9E9E9)),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(survey.imageRes),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        SurveyImage(survey = survey,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(12.dp))
+        )
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxSize()
-                .padding(start = 14.dp, top = 11.dp, end = 10.dp),
-            horizontalAlignment = Alignment.Start
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = survey.category,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(survey.badgeColor)
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                color = Color.Black,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
+                    .border(2.dp, Color.White, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                color = survey.badgeTextColor,
+                fontFamily = HomeFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
             Text(
                 text = survey.title,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 color = Color.Black,
-                fontSize = 20.sp,
+                fontFamily = HomeFont,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1
+                lineHeight = 20.sp,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = survey.author,
-                modifier = Modifier.padding(top = 41.dp),
-                color = Color.Black,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .width(100.dp)
-                    .height(35.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFE9DBB8)),
-                contentAlignment = Alignment.CenterStart
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
+                    text = survey.author,
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFF545454),
+                    fontFamily = HomeFont,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
                     text = survey.points,
-                    modifier = Modifier.padding(start = 12.5.dp),
-                    color = Color.Black,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFE9DBB8))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    color = HomeGreen,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 18.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.End,
+                    maxLines = 1
                 )
             }
         }
     }
 }
-
 @Composable
-private fun HomeBottomBar(
+private fun HomeFloatingActions(
     onSearchClick: () -> Unit,
     onCreateSurveyClick: () -> Unit,
-    onMyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(93.dp)
-            .clip(RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp))
-            .background(HeaderSurface),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.Top
+    Column(
+        modifier = modifier.padding(end = 16.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        BottomBarItem(
-            label = "홈",
-            icon = Icons.Outlined.Home,
-            selected = true,
-            onClick = {}
-        )
-        BottomBarItem(
-            label = "설문 찾기",
-            icon = Icons.Outlined.Search,
-            onClick = onSearchClick
-        )
-        BottomBarItem(
-            label = "설문 만들기",
-            icon = Icons.Outlined.PieChartOutline,
-            onClick = onCreateSurveyClick
-        )
-        BottomBarItem(
-            label = "MY",
-            icon = Icons.Outlined.Person,
-            onClick = onMyClick
-        )
+        Box(
+            modifier = Modifier.size(48.dp).clip(CircleShape)
+                .background(HomeGreen).clickable(onClick = onSearchClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Outlined.Search, contentDescription = "설문 검색", tint = Color.White,
+                modifier = Modifier.size(26.dp))
+        }
+        Box(
+            modifier = Modifier.size(48.dp).clip(CircleShape)
+                .background(HomeGreen).clickable(onClick = onCreateSurveyClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Outlined.Edit, contentDescription = "설문 만들기", tint = Color.White,
+                modifier = Modifier.size(24.dp))
+        }
     }
 }
-
+@Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
-private fun BottomBarItem(
-    label: String,
-    icon: ImageVector,
-    selected: Boolean = false,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(90.dp)
-            .height(90.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) BaobabGreen else Color.Black,
-            modifier = Modifier
-                .padding(top = 16.dp)
-                .size(30.dp)
-        )
-        Text(
-            text = label,
-            modifier = Modifier
-                .width(80.dp)
-                .padding(top = 3.7.dp),
-            color = if (selected) BaobabGreen else Color.Black,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
-    }
+private fun HomeScreenPreview() {
+    HomeScreen(surveys = SampleSurveys)
 }

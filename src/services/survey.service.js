@@ -42,7 +42,8 @@ function questionData(data) {
     fail(400, 'Single-choice questions need at least two distinct options');
   }
   if (questionType === 'short' && labels.length) fail(400, 'Short-answer questions cannot have options');
-  return { question: text(data.question ?? data.text, 'question'), questionType, options: { create: labels.map(optionText => ({ optionText })) } };
+  if (data.required !== undefined && typeof data.required !== 'boolean') fail(400, 'required must be a boolean');
+  return { question: text(data.question ?? data.text, 'question'), questionType, required: data.required ?? true, options: { create: labels.map(optionText => ({ optionText })) } };
 }
 function surveyData(data, partial = false) {
   data = { ...data,
@@ -59,6 +60,25 @@ function surveyData(data, partial = false) {
   if (data.status !== undefined) {
     if (!['OPEN', 'CLOSED'].includes(data.status)) fail(400, 'status must be OPEN or CLOSED');
     result.status = data.status;
+  }
+  for (const field of ['description', 'audience', 'duration']) {
+    if (data[field] !== undefined) {
+      if (data[field] !== null && (typeof data[field] !== 'string' || data[field].length > 5000)) fail(400, `Invalid ${field}`);
+      result[field] = data[field] === null ? null : data[field].trim() || null;
+    }
+  }
+  if (data.imageData !== undefined) {
+    if (data.imageData !== null) {
+      if (typeof data.imageData !== 'string' || data.imageData.length > 1000000) fail(400, 'Image is too large');
+      const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data.imageData);
+      if (!match) fail(400, 'Invalid image format');
+      const bytes = Buffer.from(match[2], 'base64');
+      const valid = match[1] === 'jpeg' ? bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255])) :
+        match[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) :
+        bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+      if (!valid) fail(400, 'Invalid image data');
+    }
+    result.imageData = data.imageData;
   }
   if (data.endDate !== undefined) result.endDate = date(data.endDate);
   return result;
@@ -220,7 +240,7 @@ class SurveyService {
       if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date())) fail(400, 'Survey is closed');
       const existing = await tx.response.findUnique({ where: { userId_surveyId: { userId: participantId, surveyId: targetSurveyId } } });
       if (existing) fail(409, 'Already participated');
-      if (!survey.questions.length || answers.length !== survey.questions.length) fail(400, 'Answer every question exactly once');
+      if (!survey.questions.length) fail(400, 'Survey has no questions');
       const seen = new Set();
       const normalized = answers.map(a => {
         if (!a || typeof a !== 'object') fail(400, 'Invalid answer');
@@ -232,6 +252,9 @@ class SurveyService {
         if (question.questionType === 'single' && !question.options.some(o => o.optionText === answer)) fail(400, 'Invalid option');
         return { questionId, answer };
       });
+      if (survey.questions.some(question => question.required && !seen.has(question.id))) {
+        fail(400, 'Answer every required question');
+      }
       const updated = await tx.survey.updateMany({
         where: { id: targetSurveyId, status: 'OPEN',
           OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
@@ -259,8 +282,8 @@ class SurveyService {
     return { surveyId: survey.id, totalResponses, questions: survey.questions.map(q => {
       const counts = new Map(q.options.map(o => [o.optionText, 0]));
       q.answers.forEach(a => counts.set(a.answer, (counts.get(a.answer) || 0) + 1));
-      return { questionId: q.id, results: [...counts].map(([option, value]) => ({ option, count: value,
-        percentage: totalResponses ? Math.round(value / totalResponses * 100) : 0 })) };
+      return { questionId: q.id, responseCount: q.answers.length, results: [...counts].map(([option, value]) => ({ option, count: value,
+        percentage: q.answers.length ? Math.round(value / q.answers.length * 100) : 0 })) };
     }) };
   }
 }

@@ -32,6 +32,10 @@ model Survey {
   userId       Int        @map("user_id")
   title        String
   category     String?
+  description  String?
+  audience     String?
+  duration     String?
+  imageData    String?
   rewardPoint  Int        @default(0) @map("reward_point")
   targetCount  Int        @default(0) @map("target_count")
   currentCount Int        @default(0) @map("current_count")
@@ -50,6 +54,7 @@ model Question {
   id           Int            @id @default(autoincrement()) @map("question_id")
   surveyId     Int            @map("survey_id")
   question     String
+  required     Boolean        @default(true)
   questionType String         @default("single") @map("question_type")
 
   survey       Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
