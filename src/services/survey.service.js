@@ -182,21 +182,53 @@ class SurveyService {
 
   async createSurvey(userId, data) {
     if (!Array.isArray(data.questions) || !data.questions.length) fail(400, 'questions must be a nonempty array');
-    return this.prisma.survey.create({
-      data: { ...surveyData(data), userId: id(userId), questions: { create: data.questions.map(questionData) } },
-      include: surveyInclude,
+    const fields = surveyData(data);
+    const questions = data.questions.map(questionData);
+    const reward = fields.rewardPoint ?? 0;
+    const target = fields.targetCount ?? 0;
+    if (reward > 0 && target === 0) fail(400, '포인트 보상이 있는 설문은 지급 인원을 지정해주세요.');
+    const budget = reward * target;
+    if (!Number.isSafeInteger(budget) || budget > 2147483647) fail(400, '리워드 총액이 너무 큽니다.');
+    return this.prisma.$transaction(async tx => {
+      if (budget > 0) {
+        const deducted = await tx.user.updateMany({ where: { id: id(userId), point: { gte: budget } },
+          data: { point: { decrement: budget } } });
+        if (!deducted.count) fail(400, '보유 포인트가 부족합니다. 리워드 또는 지급 인원을 줄여주세요.');
+      }
+      const survey = await tx.survey.create({
+        data: { ...fields, fundedReward: budget, userId: id(userId), questions: { create: questions } }, include: surveyInclude
+      });
+      if (budget > 0) await tx.pointHistory.create({ data: { userId: id(userId), amount: -budget,
+        description: 'Survey registration reward budget: ' + survey.title } });
+      return survey;
     });
   }
 
   async updateSurvey(userId, surveyId, data) {
-    await this.ownedSurvey(userId, surveyId);
-    return this.prisma.survey.update({ where: { id: id(surveyId) }, data: surveyData(data, true), include: surveyInclude });
+    const survey = await this.ownedSurvey(userId, surveyId);
+    const fields = surveyData(data, true);
+    if ((fields.rewardPoint !== undefined && fields.rewardPoint !== survey.rewardPoint) ||
+        (fields.targetCount !== undefined && fields.targetCount !== survey.targetCount)) {
+      fail(400, '등록 후 리워드와 지급 인원은 변경할 수 없습니다.');
+    }
+    return this.prisma.survey.update({ where: { id: id(surveyId) }, data: fields, include: surveyInclude });
   }
 
   async deleteSurvey(userId, surveyId) {
-    await this.ownedSurvey(userId, surveyId);
-    await this.prisma.survey.delete({ where: { id: id(surveyId) } });
-    return { message: 'Survey deleted' };
+    return this.prisma.$transaction(async tx => {
+      const survey = await tx.survey.findUnique({ where: { id: id(surveyId) } });
+      if (!survey) fail(404, 'Survey not found');
+      if (survey.userId !== id(userId)) fail(403, 'Only the author can perform this action');
+      const responses = await tx.response.count({ where: { surveyId: survey.id } });
+      const refundPoint = Math.max(0, survey.fundedReward - responses * survey.rewardPoint);
+      await tx.survey.delete({ where: { id: survey.id } });
+      if (refundPoint > 0) {
+        await tx.user.update({ where: { id: survey.userId }, data: { point: { increment: refundPoint } } });
+        await tx.pointHistory.create({ data: { userId: survey.userId, amount: refundPoint,
+          description: 'Survey unused reward refund: ' + survey.title } });
+      }
+      return { message: 'Survey deleted', refundPoint };
+    });
   }
 
   async editableSurvey(userId, surveyId) {

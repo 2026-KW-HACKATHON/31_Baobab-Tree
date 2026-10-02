@@ -210,6 +210,7 @@ class MainActivity : ComponentActivity() {
                             ) { survey ->
                                 key(survey.id) {
                                     SurveyDetailScreen(
+                                        onBack = { viewModel.goBack() },
                                         survey = survey,
                                         canDelete = account.token != null && myPage.profile?.id != null &&
                                             survey.userId == myPage.profile?.id,
@@ -282,9 +283,6 @@ class MainActivity : ComponentActivity() {
                         SurveyCreationStepTwoScreen(
                             state = viewModel.creationState,
                             onBackClick = { viewModel.goBack() },
-                            onCreatePageClick = {
-                                // 현재는 별도 동작 없음
-                            },
                             onNextClick = { _ ->
                                 viewModel.navigate(BaobabScreen.CREATE_THREE)
                             }
@@ -295,6 +293,7 @@ class MainActivity : ComponentActivity() {
                     BaobabScreen.CREATE_THREE -> {
                         LocalNetworkPermissionGate {
                         SurveyCreationStepThreeScreen(
+                            currentPoint = myPage.profile?.point ?: account.point,
                             submitting = account.busy,
                             error = account.error,
                             state = viewModel.creationState,
@@ -307,6 +306,7 @@ class MainActivity : ComponentActivity() {
                                     val draft = viewModel.snapshotDraft(settings)
                                     account.create(draft) {
                                         viewModel.completeCreation(draft)
+                                        myPage.load(account.token)
                                         surveyData.loadSurveys(force = true)
                                     }
                                 }

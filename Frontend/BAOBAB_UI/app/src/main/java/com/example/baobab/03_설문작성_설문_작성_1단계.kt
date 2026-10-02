@@ -1,5 +1,20 @@
 package com.example.baobab
 
+import android.app.DatePickerDialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.outlined.ExpandMore
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +61,14 @@ private val SurveyFormField = Color.White
 private val SurveyFormBorder = Color(0xFFD9E0D5)
 private val SurveyFormPlaceholder = Color(0xFF6F786E)
 private val SurveyFormInter = FontFamily.SansSerif
+private val SurveyDateFormat = DateTimeFormatter.ofPattern("uuuu. MM. dd.")
+    .withResolverStyle(java.time.format.ResolverStyle.STRICT)
+internal fun parseSurveyDeadline(value: String): LocalDate? =
+    runCatching { LocalDate.parse(value.trim(), SurveyDateFormat) }.getOrNull()
+
+internal fun isSurveyBasicsComplete(draft: SurveyDraftStepOne, today: LocalDate = LocalDate.now()): Boolean =
+    draft.title.isNotBlank() && draft.category in SurveyCategories && draft.introduction.isNotBlank() &&
+        draft.audience.isNotBlank() && parseSurveyDeadline(draft.deadline)?.let { !it.isBefore(today) } == true
 
 @Composable
 fun SurveyCreationStepOneScreen(
@@ -58,6 +81,9 @@ fun SurveyCreationStepOneScreen(
     var introduction by state::introduction
     var audience by state::audience
     var deadline by state::deadline
+    var selectingCategory by rememberSaveable { mutableStateOf(false) }
+    val draft = SurveyDraftStepOne(title, category, introduction, audience, deadline)
+    val ready = isSurveyBasicsComplete(draft)
 
     Box(
         modifier = Modifier
@@ -82,26 +108,41 @@ fun SurveyCreationStepOneScreen(
                     onValueChange = { title = it }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                SurveyFieldSection(
-                    number = 2,
-                    label = "카테고리",
-                    value = category,
-                    placeholder = "카테고리를 선택하십시오. (필수)",
-                    onValueChange = { category = it }
-                )
+                Column {
+                    SurveySelectionField("2. 카테고리 (필수)", category.ifBlank { "카테고리를 선택해주세요" },
+                        Icons.Outlined.ExpandMore, { selectingCategory = !selectingCategory })
+                    androidx.compose.animation.AnimatedVisibility(visible = selectingCategory) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp)
+                            .background(SurveyFormField, RoundedCornerShape(10.dp))
+                            .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))) {
+                            SurveyCategories.forEachIndexed { index, item ->
+                                Row(Modifier.fillMaxWidth()
+                                    .background(if (category == item) Color(0xFFEAF0E4) else Color.Transparent)
+                                    .clickable { category = item; selectingCategory = false }
+                                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(item, color = SurveyFormGreen, fontSize = 14.sp)
+                                    if (category == item) Text("✓", color = SurveyFormGreen)
+                                }
+                                if (index < SurveyCategories.lastIndex)
+                                    androidx.compose.material3.HorizontalDivider(color = SurveyFormBorder)
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 3,
-                    label = "설문 소개",
+                    label = "설문 소개 (필수)",
                     value = introduction,
-                    placeholder = "카테고리를 선택하십시오. (필수)",
+                    placeholder = "예) 주민들이 원하는 동네 시설을 알아보기 위한 설문입니다. 설문의 목적과 내용을 소개해주세요.",
                     onValueChange = { introduction = it },
                     multiline = true
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 4,
-                    label = "설문 대상",
+                    label = "설문 대상 (필수)",
                     value = audience,
                     placeholder = "예) 월계 1동 주민, 광운대학생 등",
                     onValueChange = { audience = it }
@@ -114,29 +155,20 @@ fun SurveyCreationStepOneScreen(
             }
         }
 
-        Box(
+        Button(
+            onClick = { if (isSurveyBasicsComplete(draft)) onNextClick(draft) },
+            enabled = ready,
+            colors = ButtonDefaults.buttonColors(containerColor = SurveyFormGreen),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 16.dp)
                 .height(55.dp)
-                .background(SurveyFormGreen, RoundedCornerShape(16.dp))
-                .clickable {
-                    onNextClick(
-                        SurveyDraftStepOne(
-                            title = title,
-                            category = category,
-                            introduction = introduction,
-                            audience = audience,
-                            deadline = deadline
-                        )
-                    )
-                },
-            contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "다음 단계로",
+                text = if (ready) "다음 단계로" else "필수 정보를 모두 입력해주세요",
                 color = Color.White,
                 fontSize = 17.sp,
                 lineHeight = 24.sp,
@@ -230,60 +262,34 @@ private fun SurveyInput(
 }
 
 @Composable
-private fun SurveyDeadlineSection(
-    value: String,
-    onValueChange: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .padding(start = 20.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "5. 설문 마감일",
-            color = SurveyFormGreen,
-            fontFamily = SurveyFormInter,
-            fontSize = 16.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .weight(1f)
-                .height(40.dp),
-            singleLine = true,
-            textStyle = TextStyle(
-                color = Color.Black,
-                fontFamily = SurveyFormInter,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))
-                        .background(SurveyFormField, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.EventAvailable,
-                        contentDescription = "마감일",
-                        tint = SurveyFormGreen,
-                        modifier = Modifier.size(30.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    innerTextField()
-                }
-            }
-        )
+private fun SurveySelectionField(label: String, value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text(label, Modifier.padding(start = 4.dp, bottom = 11.dp), color = SurveyFormGreen,
+            fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .background(SurveyFormField, RoundedCornerShape(10.dp))
+            .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(value, Modifier.weight(1f), fontSize = 14.sp)
+            Icon(icon, label, tint = SurveyFormGreen)
+        }
     }
+}
+
+@Composable
+private fun SurveyDeadlineSection(value: String, onValueChange: (String) -> Unit) {
+    val context = LocalContext.current
+    SurveySelectionField("5. 설문 마감일 (필수)", value.ifBlank { "달력에서 날짜를 선택해주세요" },
+        Icons.Outlined.EventAvailable, {
+            val today = LocalDate.now()
+            val initial = parseSurveyDeadline(value)?.takeIf { !it.isBefore(today) } ?: today
+            DatePickerDialog(context, { _, year, month, day ->
+                onValueChange(LocalDate.of(year, month + 1, day).format(SurveyDateFormat))
+            }, initial.year, initial.monthValue - 1, initial.dayOfMonth).apply {
+                datePicker.minDate = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.show()
+        })
 }
 
 @Preview(showBackground = true, widthDp = 402, heightDp = 874)

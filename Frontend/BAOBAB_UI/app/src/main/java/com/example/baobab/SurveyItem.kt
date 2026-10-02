@@ -2,6 +2,8 @@ package com.example.baobab
 
 import androidx.compose.ui.graphics.Color
 
+val SurveyCategories = listOf("생활·편의", "지역·사회", "교육·학습", "문화·스포츠", "경제·상권", "건강·의료")
+
 fun surveyCategoryImage(category: String): Int = when (category.trim()) {
     "생활·편의" -> R.drawable.search_card_01
     "교육·학습" -> R.drawable.search_card_02

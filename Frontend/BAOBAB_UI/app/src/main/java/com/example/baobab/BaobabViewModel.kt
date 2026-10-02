@@ -16,7 +16,7 @@ class SurveyCreationState {
     var category by mutableStateOf("")
     var introduction by mutableStateOf("")
     var audience by mutableStateOf("")
-    var deadline by mutableStateOf("2026. 10. 08.")
+    var deadline by mutableStateOf("")
     val questions = mutableStateListOf(
         SurveyQuestionDraft(
             type = SurveyQuestionType.MULTIPLE_CHOICE,

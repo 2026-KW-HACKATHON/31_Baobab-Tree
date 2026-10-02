@@ -67,6 +67,7 @@ fun SurveyCreationStepThreeScreen(
     onCompleteClick: (SurveySettingsDraft) -> Unit = {},
     submitting: Boolean = false,
     error: String? = null,
+    currentPoint: Int? = null,
     state: SurveyCreationState = remember { SurveyCreationState() }
 ) {
     var rewardPerPerson by state::rewardPerPerson
@@ -117,6 +118,10 @@ fun SurveyCreationStepThreeScreen(
                     onRewardPerPersonChange = { rewardPerPerson = it },
                     onRewardRecipientsChange = { rewardRecipients = it }
                 )
+                Text("보유 포인트: ${currentPoint?.let { "%,d P".format(it) } ?: "확인 중"}",
+                    modifier = Modifier.padding(top = 12.dp, start = 4.dp), color = StepThreeGreen)
+                Text("등록 시 1인당 리워드 × 지급 인원만큼 포인트가 차감됩니다.",
+                    modifier = Modifier.padding(top = 6.dp, start = 4.dp), fontSize = 13.sp, color = Color(0xFF697369))
                 Spacer(modifier = Modifier.height(14.dp))
                 TimeSectionLabel()
                 Spacer(modifier = Modifier.height(14.dp))
@@ -211,8 +216,8 @@ private fun RewardSettingsCard(
     onRewardPerPersonChange: (String) -> Unit,
     onRewardRecipientsChange: (String) -> Unit
 ) {
-    val points = (rewardPerPerson.filter(Char::isDigit).toIntOrNull() ?: 0) *
-        (rewardRecipients.filter(Char::isDigit).toIntOrNull() ?: 0)
+    val points = (rewardPerPerson.filter(Char::isDigit).toLongOrNull() ?: 0L) *
+        (rewardRecipients.filter(Char::isDigit).toLongOrNull() ?: 0L)
 
     Column(
         modifier = Modifier
@@ -225,13 +230,13 @@ private fun RewardSettingsCard(
         RewardRow(
             label = "1인당 지급할 리워드",
             value = rewardPerPerson,
-            valueWidth = 75.dp,
+            unit = "P",
             onValueChange = onRewardPerPersonChange
         )
         RewardRow(
             label = "리워드 지급 인원 수",
             value = rewardRecipients,
-            valueWidth = 68.dp,
+            unit = "명",
             onValueChange = onRewardRecipientsChange
         )
         Row(
@@ -265,7 +270,7 @@ private fun RewardSettingsCard(
 private fun RewardRow(
     label: String,
     value: String,
-    valueWidth: Dp,
+    unit: String,
     onValueChange: (String) -> Unit
 ) {
     Row(
@@ -284,9 +289,10 @@ private fun RewardRow(
             modifier = Modifier.weight(1f)
         )
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.width(valueWidth)
+            value = value.filter(Char::isDigit),
+            onValueChange = { entered -> onValueChange(entered.filter { it in '0'..'9' }.take(9)) },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+            modifier = Modifier.width(92.dp)
                 .height(37.dp),
             singleLine = true,
             textStyle = TextStyle(
@@ -309,6 +315,8 @@ private fun RewardRow(
                 }
             }
         )
+        Text(unit, modifier = Modifier.width(28.dp).padding(start = 8.dp),
+            fontSize = 14.sp, fontWeight = FontWeight.Bold, color = StepThreeGreen)
     }
 }
 

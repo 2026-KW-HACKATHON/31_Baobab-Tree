@@ -56,5 +56,5 @@ fun SurveyImage(survey: SurveyItem, modifier: Modifier = Modifier, contentScale:
         }.getOrNull()
     }
     if (bitmap != null) Image(bitmap, contentDescription = null, modifier = modifier, contentScale = contentScale)
-    else Image(painterResource(survey.imageRes), contentDescription = null, modifier = modifier, contentScale = contentScale)
+    else Image(painterResource(surveyCategoryImage(survey.category)), contentDescription = null, modifier = modifier, contentScale = contentScale)
 }

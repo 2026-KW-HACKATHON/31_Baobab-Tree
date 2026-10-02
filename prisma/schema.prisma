@@ -36,6 +36,7 @@ model Survey {
   audience     String?
   duration     String?
   imageData    String?
+  fundedReward Int       @default(0)
   rewardPoint  Int        @default(0) @map("reward_point")
   targetCount  Int        @default(0) @map("target_count")
   currentCount Int        @default(0) @map("current_count")

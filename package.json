@@ -11,7 +11,8 @@
     "db:migrate:survey-fields": "node scripts/migrate-survey-fields.js",
     "db:validate": "prisma validate",
     "db:push": "prisma db push",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:migrate:reward-refund": "node scripts/migrate-reward-refund.js"
   },
   "keywords": [],
   "author": "",

@@ -255,3 +255,11 @@ A recipient needs the BAOBAB app and network access to the configured API server
 No public web landing page is deployed yet.
 
 Production configuration and Android session behavior: see [deployment setup](deployment.md).
+
+## Funded rewards and deletion refunds
+
+Creating a survey charges the author rewardPoint × targetCount in the same transaction as creation. Paid surveys require targetCount > 0; insufficient balance rejects creation without saving or charging. The server sets fundedReward; clients cannot set it. Reward and target count cannot change after registration.
+
+DELETE /surveys/:id refunds max(0, fundedReward - response count × rewardPoint) to the author, records a positive PointHistory entry and deletes the survey in one transaction. It returns { message: "Survey deleted", refundPoint }. Already-paid participant points remain unchanged. Repeated deletion returns 404 and never refunds again. Existing uncharged surveys have fundedReward = 0 and do not qualify for refunds.
+
+For an existing database, stop the server and run npm run db:migrate:reward-refund, then npm run db:generate. The migration backs up the database and identifies previous registration charges by author, amount, title and creation time. Ambiguous historic charges abort migration for manual reconciliation. Apply db:migrate:survey-fields first if needed.

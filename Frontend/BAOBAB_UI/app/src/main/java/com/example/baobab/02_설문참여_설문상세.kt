@@ -1,564 +1,120 @@
 package com.example.baobab
 
-import android.view.View
-import android.webkit.WebView
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Toll
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.style.TextAlign
 
-private val SurveyDetailBackground = Color(0xFFFDF9F1)
-private val SurveyDetailGreen = Color(0xFF2F5539)
-private val SurveyDetailSecondary = Color(0xFF545454)
-private val SurveyDetailPanel = Color(0x80FDF9F1)
-private val SurveyDetailBorder = Color(0x80545454)
-private val SurveyDetailInter = FontFamily.SansSerif
+private val DetailGreen = Color(0xFF2F5539)
+private val DetailMuted = Color(0xFF697369)
 
 @Composable
-fun SurveyDetailScreen(
-    onParticipateClick: () -> Unit = {},
-    survey: SurveyItem = SampleSurveys.first(),
-    onRelatedSurveyClick: (SurveyItem) -> Unit = {},
-    relatedSurveys: List<SurveyItem> = emptyList(),
-    canDelete: Boolean = false,
-    onDelete: () -> Unit = {}
-) {
+fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem = SampleSurveys.first(),
+    onRelatedSurveyClick: (SurveyItem) -> Unit = {}, relatedSurveys: List<SurveyItem> = emptyList(),
+    canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}) {
     val context = LocalContext.current
-    val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SurveyDetailBackground)
-            .safeDrawingPadding()
-    ) {
-        SurveyImage(survey = survey,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(220.dp)
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 200.dp)
-                .fillMaxWidth()
-                .fillMaxSize()
-                .shadow(2.dp, panelShape)
-                .clip(panelShape)
-                .background(Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 107.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 23.dp)
-                ) {
-                    SurveyCategory(survey)
-                    SurveyTitleBlock(survey)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { shareSurvey(context, survey) }) { Text("공유") }
-                        if (canDelete) TextButton(onClick = onDelete) {
-                            Text("설문 삭제", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    SurveyMetaRow(survey)
-                    SurveyStats(survey)
-                    SurveyDescription(survey)
-                    RelatedSurveySection(
-                        surveys = relatedSurveys.filter { it.category == survey.category && it.id != survey.id },
-                        onSurveyClick = onRelatedSurveyClick
-                    )
+    val related = relatedSurveys.filter { it.category == survey.category && it.id != survey.id }
+    Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = DetailGreen) }
+            Text("설문 상세", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { shareSurvey(context, survey) }) { Icon(Icons.Outlined.Share, "설문 공유", tint = DetailGreen) }
+            if (canDelete) TextButton(onDelete) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            SurveyImage(survey, Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(24.dp)))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = Color(0xFFEAF0E4), shape = RoundedCornerShape(8.dp)) {
+                    Text(survey.category.ifBlank { "일반 설문" }, Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = DetailGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(survey.title, fontSize = 25.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = DetailGreen)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.Person, null, tint = DetailMuted, modifier = Modifier.size(20.dp))
+                    Text(survey.author.ifBlank { "설문 작성자" }, Modifier.weight(1f), color = DetailMuted, fontSize = 14.sp)
                 }
             }
+            Surface(color = Color.White, shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    DetailMetric(Icons.Outlined.Toll, "참여 보상", survey.points.ifBlank { "0P" }, true)
+                    HorizontalDivider(color = Color(0xFFE8ECE4))
+                    DetailMetric(Icons.Outlined.Groups, "참여 현황", "${survey.participantCount ?: 0}명 참여")
+                    DetailMetric(Icons.Outlined.Schedule, "예상 소요시간", survey.duration?.takeIf { it.isNotBlank() } ?: "안내 없음")
+                }
+            }
+            Text("설문 소개", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text(survey.description?.takeIf { it.isNotBlank() } ?: "등록된 소개가 없습니다. 아래 참여 정보를 확인해주세요.",
+                fontSize = 15.sp, lineHeight = 24.sp, color = DetailMuted)
+            Surface(color = Color.White, shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DetailInfo("참여 대상", survey.audience?.takeIf { it.isNotBlank() } ?: "누구나 참여 가능")
+                    HorizontalDivider(color = Color(0xFFE8ECE4))
+                    DetailInfo("마감일", survey.deadline?.takeIf { it.isNotBlank() } ?: "별도 마감일 없음")
+                    DetailInfo("문항 수", "${survey.questionCount ?: survey.questions.size}문항")
+                }
+            }
+            if (related.isNotEmpty()) {
+                Text("같은 카테고리의 설문", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    related.take(6).forEach { item ->
+                        Box(Modifier.width(200.dp)) { SurveyFeedCard(item, onClick = { onRelatedSurveyClick(item) }) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
-
-        SurveyParticipateButton(
-            onClick = onParticipateClick,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-    }
-}
-
-@Composable
-private fun SurveyCategory(survey: SurveyItem) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .height(32.dp)
-                .padding(horizontal = 10.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(survey.badgeColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = survey.category,
-                color = Color.Black,
-                fontFamily = SurveyDetailInter,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-private fun SurveyTitleBlock(survey: SurveyItem) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 44.dp),
-            contentAlignment = Alignment.TopStart
-        ) {
-            Text(
-                text = survey.title,
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = Color.Black,
-                fontFamily = SurveyDetailInter,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 24.sp
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 50.dp)
-                .padding(horizontal = 1.dp),
-            contentAlignment = Alignment.TopStart
-        ) {
-            Text(
-                text = survey.description ?: "소개 미등록",
-                color = SurveyDetailSecondary,
-                fontFamily = SurveyDetailInter,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 15.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun SurveyMetaRow(survey: SurveyItem) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(70.dp)
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),//임시로 바꿈
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 15.dp)
-                .size(40.dp)
-                .clip(CircleShape)
-        )
-        Text(
-            text = survey.author,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 50.dp, top = 26.dp)
-                .width(117.dp)
-                .height(18.dp),
-            color = Color.Black,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Normal,
-            lineHeight = 18.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        SvgAsset(
-            assetName = "survey_divider.svg",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 177.dp, top = 20.dp)
-                .width(1.dp)
-                .height(30.dp)
-        )
-        SvgAsset(
-            assetName = "survey_calendar_icon.svg",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 187.dp, top = 20.dp)
-                .size(30.dp)
-        )
-        Text(
-            text = survey.deadline ?: "마감일 미등록",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 224.5.dp, top = 26.dp)
-                .width(117.dp)
-                .height(18.dp),
-            color = Color.Black,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Normal,
-            lineHeight = 18.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun SurveyStats(survey: SurveyItem) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(102.dp)
-            .border(1.dp, SurveyDetailBorder, RoundedCornerShape(15.dp))
-            .clip(RoundedCornerShape(15.dp))
-            .background(SurveyDetailBackground),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SurveyStat(
-            icon = "survey_participants_icon.svg",
-            label = survey.participantCount?.let { "${it}명 참여" } ?: "참여자 미등록",
-            modifier = Modifier.weight(1f)
-        )
-        SurveyStat(
-            icon = "survey_hourglass_icon.svg",
-            label = survey.duration ?: "소요시간 미등록",
-            modifier = Modifier.weight(1f)
-        )
-        SurveyStat(
-            icon = "survey_points_icon.svg",
-            label = survey.points,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun SurveyStat(
-    icon: String,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    Box(modifier = modifier.height(100.dp)) {
-        SvgAsset(
-            assetName = icon,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 20.dp)
-                .size(40.dp)
-        )
-        Text(
-            text = label,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 65.dp)
-                .width(83.dp),
-            color = Color.Black,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun SurveyDescription(survey: SurveyItem) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            contentAlignment = Alignment.TopStart
-        ) {
-            Text(
-                text = "설문 소개",
-                modifier = Modifier.padding(top = 20.dp),
-                color = Color.Black,
-                fontFamily = SurveyDetailInter,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 29.sp
-            )
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, SurveyDetailBorder, RoundedCornerShape(15.dp))
-                .clip(RoundedCornerShape(15.dp))
-                .background(SurveyDetailPanel)
-                .padding(horizontal = 1.dp, vertical = 5.dp)
-        ) {
-            SurveyDescriptionRow(label = "대상", value = survey.audience ?: "미등록")
-            SurveyDescriptionRow(label = "주제", value = survey.title)
-            SurveyDescriptionRow(label = "문항 수", value = survey.questionCount?.let { "${it}문항" } ?: "미등록")
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            contentAlignment = Alignment.TopStart
-        ) {
-            Text(
-                text = "같은 카테고리의 설문",
-                modifier = Modifier.padding(top = 20.dp),
-                color = Color.Black,
-                fontFamily = SurveyDetailInter,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 29.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun SurveyDescriptionRow(
-    label: String,
-    value: String
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 10.dp)
-                .width(100.dp),
-            color = Color.Black,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 18.sp
-        )
-        Text(
-            text = value,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 110.dp)
-                .width(234.dp),
-            color = SurveyDetailSecondary,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun RelatedSurveySection(
-    surveys: List<SurveyItem>,
-    onSurveyClick: (SurveyItem) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        surveys.forEach { survey ->
-            RelatedSurveyCard(survey, onClick = { onSurveyClick(survey) })
-        }
-    }
-}
-
-@Composable
-private fun RelatedSurveyCard(survey: SurveyItem, onClick: () -> Unit) {
-    val cardShape = RoundedCornerShape(10.dp)
-
-    Box(
-        modifier = Modifier
-            .size(180.dp)
-            .shadow(2.dp, cardShape)
-            .clip(cardShape)
-            .background(Color.White)
-            .clickable(onClick = onClick)
-    ) {
-        SurveyImage(survey = survey,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 5.dp)
-                .size(width = 170.dp, height = 85.dp)
-                .clip(RoundedCornerShape(10.dp))
-        )
-        Text(
-            text = survey.title,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 105.dp)
-                .size(width = 160.dp, height = 36.dp),
-            color = Color.Black,
-            fontFamily = SurveyDetailInter,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 18.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Clip
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 157.dp)
-                .width(160.dp)
-                .height(13.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = survey.author,
-                modifier = Modifier.width(75.dp),
-                color = SurveyDetailSecondary,
-                fontFamily = SurveyDetailInter,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = survey.points,
-                modifier = Modifier.width(75.dp),
-                color = SurveyDetailGreen,
-                fontFamily = SurveyDetailInter,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.End,
-                maxLines = 1
-            )
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 10.dp, top = 75.dp)
-                .clip(CircleShape)
-                .background(survey.badgeColor)
-                .border(2.dp, Color.White, CircleShape)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = survey.category,
-                color = survey.badgeTextColor,
-                fontFamily = SurveyDetailInter,
-                fontSize = survey.badgeFontSize.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-private fun SurveyParticipateButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 16.dp)
-            .height(55.dp)
-            .clip(RoundedCornerShape(40.dp))
-            .background(SurveyDetailGreen)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "설문 참여하기",
-            color = Color.White,
-            fontFamily = SurveyDetailInter,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun SvgAsset(
-    assetName: String,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            WebView(context).apply {
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                overScrollMode = View.OVER_SCROLL_NEVER
-                settings.javaScriptEnabled = false
-                loadDataWithBaseURL(
-                    "file:///android_asset/",
-                    """<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1\"></head><body style=\"margin:0;background:transparent;width:100%;height:100%;overflow:hidden\"><img src=\"$assetName\" style=\"display:block;width:100%;height:100%;object-fit:contain\"></body></html>""",
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
+        Surface(color = Color(0xFFFDF9F1), shadowElevation = 4.dp) {
+            Button(onParticipateClick, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp).heightIn(min = 54.dp),
+                shape = RoundedCornerShape(16.dp), enabled = survey.status != "CLOSED") {
+                Text(if (survey.status == "CLOSED") "마감된 설문입니다" else "설문 참여하기", fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
         }
-    )
+    }
 }
 
-@Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
-private fun SurveyDetailScreenPreview() {
-    SurveyDetailScreen()
+private fun DetailMetric(icon: ImageVector, label: String, value: String, highlight: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(icon, null, tint = DetailGreen, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, color = DetailMuted, fontSize = 13.sp)
+            Text(value, fontSize = if (highlight) 24.sp else 16.sp, fontWeight = FontWeight.Bold,
+                color = DetailGreen, lineHeight = if (highlight) 30.sp else 23.sp)
+        }
+    }
 }
+
+@Composable
+private fun DetailInfo(label: String, value: String) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, color = DetailMuted, fontSize = 13.sp)
+        Text(value, fontSize = 15.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 800)
+@Composable
+private fun SurveyDetailScreenPreview() { SurveyDetailScreen() }

@@ -78,6 +78,48 @@ test('schema-backed API integration', async t => {
     assert.equal(result.status, 200);
     assert.equal(result.data.region, null);
   });
+  await t.test('registration charges reward budget atomically and rejects insufficient funds', async () => {
+    const payload = { title: 'Budget check', rewardPoint: 100, targetCount: 2,
+      questions: [{ question: 'Q', questionType: 'short' }] };
+    const before = await prisma.survey.count();
+    assert.equal((await request('POST', '/surveys', payload, token)).status, 400);
+    assert.equal(await prisma.survey.count(), before);
+    assert.equal(await prisma.pointHistory.count({ where: { userId: participant.id } }), 0);
+    await prisma.user.update({ where: { id: author.id }, data: { point: 1000 } });
+    const created = await request('POST', '/surveys', payload, token);
+    assert.equal(created.status, 201);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 800);
+    assert.equal((await request('GET', '/users/me/points', undefined, token)).data.histories[0].amount, -200);
+    assert.equal((await request('PATCH', '/surveys/' + created.data.id, { rewardPoint: 999 }, token)).status, 400);
+    assert.equal((await request('POST', '/surveys', { ...payload, targetCount: 0 }, token)).status, 400);
+    assert.equal((await request('POST', '/surveys', { ...payload, questions: [{ question: '', questionType: 'short' }] }, token)).status, 400);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 800);
+    const deleted = await request('DELETE', '/surveys/' + created.data.id, undefined, token);
+    assert.equal(deleted.status, 200);
+    assert.equal(deleted.data.refundPoint, 200);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 1000);
+    assert.equal((await request('DELETE', '/surveys/' + created.data.id, undefined, token)).status, 404);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 1000);
+  });
+  await t.test('only unspent funded rewards are refunded; legacy surveys do not create points', async () => {
+    const payload = { title: 'Partial refund', rewardPoint: 100, targetCount: 3,
+      questions: [{ question: 'Q', questionType: 'short' }] };
+    const created = await request('POST', '/surveys', payload, token);
+    assert.equal(created.status, 201);
+    const url = '/surveys/' + created.data.id;
+    assert.equal((await request('DELETE', url, undefined, participantToken)).status, 403);
+    assert.equal((await request('POST', url + '/responses', { answers: [{ questionId: created.data.questions[0].id, answer: 'A' }] }, participantToken)).status, 201);
+    const deleted = await request('DELETE', url, undefined, token);
+    assert.equal(deleted.data.refundPoint, 200);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 900);
+    assert.equal((await request('GET', '/users/me', undefined, participantToken)).data.point, 100);
+    const legacy = await prisma.survey.create({ data: { userId: author.id, title: 'Unfunded legacy', rewardPoint: 100, targetCount: 10 } });
+    assert.equal((await request('DELETE', '/surveys/' + legacy.id, undefined, token)).data.refundPoint, 0);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 900);
+    // Reset fixtures for the existing participation/reward tests.
+    await prisma.user.update({ where: { id: participant.id }, data: { point: 0 } });
+    await prisma.pointHistory.deleteMany({ where: { userId: participant.id } });
+  });
   await t.test('backend legacy field names map to the Android contract', async () => {
     let result = await request('POST', '/surveys', {
       title: 'Legacy compatibility', reward_point: 10, target_headcount: 5,
@@ -137,7 +179,7 @@ test('schema-backed API integration', async t => {
     assert.equal((await request('POST', '/surveys/' + optional.data.id + '/responses', { answers: [] }, participantToken)).status, 201);
     assert.equal((await request('DELETE', '/surveys/' + optional.data.id, undefined, token)).status, 200);
     assert.equal(await prisma.response.count(), 0);
-    assert.equal(await prisma.pointHistory.count(), 0);
+    assert.equal(await prisma.pointHistory.count({ where: { userId: participant.id } }), 0);
   });
 
   await t.test('protected routes reject missing and invalid tokens', async () => {
@@ -188,7 +230,7 @@ test('schema-backed API integration', async t => {
       [{ questionId: q1, answer: 'Bus' }, { questionId: q2, answer: ' ' }],
     ]) assert.equal((await request('POST', `/surveys/${survey.id}/responses`, { answers }, participantToken)).status, 400);
     assert.equal(await prisma.response.count(), 0);
-    assert.equal(await prisma.pointHistory.count(), 0);
+    assert.equal(await prisma.pointHistory.count({ where: { userId: participant.id } }), 0);
     assert.equal((await prisma.user.findUnique({ where: { id: participant.id } })).point, 0);
     assert.equal((await prisma.survey.findUnique({ where: { id: survey.id } })).currentCount, 0);
   });
@@ -213,12 +255,12 @@ test('schema-backed API integration', async t => {
     assert.equal((await request('POST', `/surveys/${survey.id}/responses`, { answers: validAnswers() }, participantToken)).status, 409);
     assert.equal((await request('POST', `/surveys/${survey.id}/responses`, { answers: validAnswers() }, token)).status, 400);
     assert.equal((await prisma.user.findUnique({ where: { id: participant.id } })).point, 300);
-    assert.equal(await prisma.pointHistory.count(), 1);
+    assert.equal(await prisma.pointHistory.count({ where: { userId: participant.id } }), 1);
     assert.equal(await prisma.response.count(), 1);
     assert.equal((await request('PATCH', `/questions/${survey.questions[0].id}`, { question: 'Changed' }, token)).status, 409);
   });
   await t.test('closed and expired surveys reject submissions', async () => {
-    await request('PATCH', `/surveys/${survey.id}`, { status: 'CLOSED', targetCount: 0 }, token);
+    await request('PATCH', `/surveys/${survey.id}`, { status: 'CLOSED' }, token);
     assert.equal((await request('POST', `/surveys/${survey.id}/responses`, { answers: validAnswers() }, token)).status, 400);
     await request('PATCH', `/surveys/${survey.id}`, { status: 'OPEN', endDate: '2000-01-01T00:00:00Z' }, token);
     assert.equal((await request('POST', `/surveys/${survey.id}/responses`, { answers: validAnswers() }, token)).status, 400);
@@ -230,7 +272,7 @@ test('schema-backed API integration', async t => {
     await assert.rejects(service.submitResponse(999999, survey.id, validAnswers()));
     assert.equal((await prisma.survey.findUnique({ where: { id: survey.id } })).currentCount, 1);
     assert.equal(await prisma.response.count(), 1);
-    assert.equal(await prisma.pointHistory.count(), 1);
+    assert.equal(await prisma.pointHistory.count({ where: { userId: participant.id } }), 1);
   });
   await t.test('schema mirror and Backend wrappers use the same implementation', async () => {
     assert.equal(fs.readFileSync(path.join(__dirname, '../Backend/prisma/schema.prisma'), 'utf8'), fs.readFileSync(path.join(__dirname, '../prisma/schema.prisma'), 'utf8'));
