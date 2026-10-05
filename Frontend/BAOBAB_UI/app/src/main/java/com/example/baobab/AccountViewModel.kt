@@ -146,6 +146,31 @@ class AccountViewModel(
             else success()
         }, { participationNotice = it })
     }
+    fun startPointPayment(
+        provider: String,
+        amount: Int,
+        onReady: (String) -> Unit
+    ) {
+        val credential = token ?: run {
+            error = "포인트 충전에는 로그인이 필요합니다."
+            return
+        }
 
+        runRequest(
+            action = {
+                repository.preparePointPayment(
+                    token = credential,
+                    provider = provider,
+                    amount = amount
+                )
+            },
+            success = { checkoutUrl ->
+                // 요청 중 계정이 바뀌었다면 결제창을 열지 않음
+                if (token == credential) {
+                    onReady(checkoutUrl)
+                }
+            }
+        )
+    }
     override fun onCleared() { closed.set(true); worker.shutdownNow() }
 }

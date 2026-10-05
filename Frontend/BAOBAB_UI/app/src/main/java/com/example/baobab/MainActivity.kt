@@ -18,6 +18,12 @@ import androidx.compose.material3.Text
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModel
 import com.example.baobab.ui.theme.BAOBABTheme
+import android.net.Uri
+import android.content.ActivityNotFoundException
+import android.widget.Toast
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 class MainActivity : ComponentActivity() {
     private val navigation by lazy { ViewModelProvider(this)[BaobabViewModel::class.java] }
@@ -60,7 +66,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 var pendingDeletion by remember { mutableStateOf<SurveyItem?>(null) }
-                val demoWallet = remember(account.token) { DemoWalletState() }
                 pendingDeletion?.let { survey ->
                     SurveyDeleteDialog(
                         survey = survey,
@@ -327,17 +332,80 @@ class MainActivity : ComponentActivity() {
 
                     BaobabScreen.POINTS -> {
                         LocalNetworkPermissionGate {
-                            LaunchedEffect(account.token) { myPage.load(account.token) }
+                            LaunchedEffect(account.token) {
+                                myPage.load(account.token)
+                            }
+
+                            // 결제 브라우저에서 앱으로 돌아오면 잔액 갱신
+                            DisposableEffect(account.token) {
+                                val activityLifecycle =
+                                    this@MainActivity.lifecycle
+
+                                val observer = LifecycleEventObserver { _, event ->
+                                    if (event == Lifecycle.Event.ON_RESUME) {
+                                        myPage.load(account.token)
+                                    }
+                                }
+
+                                activityLifecycle.addObserver(observer)
+
+                                onDispose {
+                                    activityLifecycle.removeObserver(observer)
+                                }
+                            }
+
                             key(account.token) {
                                 PointWalletScreen(
-                                    wallet = demoWallet,
-                                    point = myPage.profile?.point ?: account.point,
+                                    point = myPage.profile?.point,
+                                    coupons = myPage.coupons,
+                                    exchangeBusy = myPage.exchangingCoupon,
+                                    exchangeError = myPage.couponError,
+                                    onExchange = { itemId, onSuccess ->
+                                        account.token?.let { token ->
+                                            myPage.exchangeCoupon(
+                                                token = token,
+                                                itemId = itemId,
+                                                success = onSuccess
+                                            )
+                                        }
+                                    },
                                     loggedIn = account.token != null,
                                     loading = myPage.loading,
                                     error = myPage.error,
-                                    onRetry = { myPage.load(account.token) },
-                                    onBack = { viewModel.goBack() },
-                                    onLogin = { account.clearError(); viewModel.navigate(BaobabScreen.LOGIN) }
+                                    paymentBusy = account.busy ||
+                                            myPage.exchangingCoupon,
+                                    paymentError = account.error,
+                                    onCharge = { provider, amount ->
+                                        account.startPointPayment(
+                                            provider = provider,
+                                            amount = amount
+                                        ) { checkoutUrl ->
+                                            try {
+                                                startActivity(
+                                                    Intent(
+                                                        Intent.ACTION_VIEW,
+                                                        Uri.parse(checkoutUrl)
+                                                    )
+                                                )
+                                            } catch (_: ActivityNotFoundException) {
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "결제창을 열 브라우저가 없습니다.",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                    onRetry = {
+                                        myPage.load(account.token)
+                                    },
+                                    onBack = {
+                                        viewModel.goBack()
+                                    },
+                                    onLogin = {
+                                        account.clearError()
+                                        viewModel.navigate(BaobabScreen.LOGIN)
+                                    }
                                 )
                             }
                         }

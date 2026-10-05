@@ -23,6 +23,8 @@ model User {
   surveys        Survey[]       @relation("CreatedSurveys")
   responses      Response[]
   pointHistories PointHistory[]
+  paymentOrders PaymentOrder[]
+  coupons Coupon[]
 
   @@map("USER")
 }
@@ -102,13 +104,56 @@ model Answer {
 }
 
 model PointHistory {
-  id          Int      @id @default(autoincrement()) @map("history_id")
-  userId      Int      @map("user_id")
-  amount      Int
-  description String
-  createdAt   DateTime @default(now()) @map("created_at")
+  id             Int           @id @default(autoincrement()) @map("history_id")
+  userId         Int           @map("user_id")
+  amount         Int
+  description    String
+  createdAt      DateTime      @default(now()) @map("created_at")
+  paymentOrderId String?       @unique @map("payment_order_id")
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentOrder PaymentOrder? @relation(fields: [paymentOrderId], references: [id], onDelete: Restrict)
 
   @@map("POINT_HISTORY")
+}
+
+model PaymentOrder {
+  id           String    @id @default(uuid())
+  userId       Int       @map("user_id")
+  provider     String
+  amount       Int
+  creditPoint  Int       @map("credit_point")
+  status       String    @default("CREATED")
+  providerRef  String?   @map("provider_ref")
+  checkoutUrl  String?   @map("checkout_url")
+  callbackHash String    @map("callback_hash")
+  approvedAt   DateTime? @map("approved_at")
+  creditedAt   DateTime? @map("credited_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pointHistory PointHistory?
+
+  @@unique([provider, providerRef])
+  @@index([userId, createdAt])
+  @@map("PAYMENT_ORDER")
+}
+model Coupon {
+  id         String    @id @default(uuid())
+  userId     Int       @map("user_id")
+  itemId     String    @map("item_id")
+  shop       String
+  title      String
+  cost       Int
+  status     String    @default("AVAILABLE")
+  requestKey String    @map("request_key")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  usedAt     DateTime? @map("used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, requestKey])
+  @@index([userId, createdAt])
+  @@map("COUPON")
 }

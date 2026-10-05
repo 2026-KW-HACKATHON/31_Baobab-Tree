@@ -12,6 +12,23 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+data class WalletCoupon(
+    val id: String,
+    val itemId: String,
+    val shop: String,
+    val title: String,
+    val cost: Int,
+    val status: String,
+    val createdAt: String,
+    val usedAt: String? = null
+)
+
+data class CouponExchangeResult(
+    val coupon: WalletCoupon,
+    val point: Int,
+    val alreadyProcessed: Boolean
+)
+
 interface SurveyRepository {
     fun getSurveys(): List<SurveyItem>
     fun getSurvey(id: String): SurveyItem
@@ -28,7 +45,7 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
     private val gson = GsonBuilder().serializeNulls().create()
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)
@@ -118,6 +135,118 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         }
     }
 
+    fun preparePointPayment(
+        token: String,
+        provider: String,
+        amount: Int
+    ): String {
+        if (provider !in listOf("KAKAOPAY", "TOSS")) {
+            throw SurveyApiException("결제 수단을 확인해주세요.")
+        }
+
+        if (amount !in listOf(1000, 3000, 5000)) {
+            throw SurveyApiException("충전 금액을 확인해주세요.")
+        }
+
+        val order = gson.fromJson(
+            request(
+                "payments/orders",
+                body = mapOf(
+                    "provider" to provider,
+                    "amount" to amount
+                ),
+                token = token
+            ),
+            com.google.gson.JsonObject::class.java
+        )
+
+        val orderId = order.get("id")?.asString
+            ?: throw SurveyApiException("충전 주문을 확인하지 못했습니다.")
+
+        val callbackToken = order.get("callbackToken")?.asString
+            ?: throw SurveyApiException("주문 확인 정보를 받지 못했습니다.")
+
+        if (
+            !Regex(
+                "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-" +
+                        "[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+            ).matches(orderId)
+        ) {
+            throw SurveyApiException("충전 주문 ID가 올바르지 않습니다.")
+        }
+
+        val paymentPath = when (provider) {
+            "KAKAOPAY" -> "kakao"
+            else -> "toss"
+        }
+
+        val ready = gson.fromJson(
+            request(
+                "payments/orders/$orderId/$paymentPath/ready",
+                body = mapOf("callbackToken" to callbackToken),
+                token = token
+            ),
+            com.google.gson.JsonObject::class.java
+        )
+
+        val checkoutUrl = ready.get("checkoutUrl")?.asString
+            ?: throw SurveyApiException("결제창 주소를 받지 못했습니다.")
+
+        val uri = try {
+            URI(checkoutUrl)
+        } catch (_: Exception) {
+            throw SurveyApiException("결제창 주소가 올바르지 않습니다.")
+        }
+
+        if (
+            uri.scheme !in listOf("http", "https") ||
+            uri.host.isNullOrBlank() ||
+            uri.userInfo != null
+        ) {
+            throw SurveyApiException("결제창 주소가 올바르지 않습니다.")
+        }
+
+        return checkoutUrl
+    }
+    fun getCoupons(token: String): List<WalletCoupon> = parse {
+        val coupons = gson.fromJson(
+            request("users/me/coupons", token = token),
+            Array<WalletCoupon>::class.java
+        ) ?: throw SurveyApiException("쿠폰 목록을 받지 못했습니다.")
+
+        coupons.toList().also { list ->
+            require(list.all {
+                it.id.isNotBlank() &&
+                        it.itemId.isNotBlank() &&
+                        it.title.isNotBlank() &&
+                        it.cost > 0
+            })
+        }
+    }
+
+    fun exchangeCoupon(
+        token: String,
+        itemId: String,
+        requestKey: String
+    ): CouponExchangeResult = parse {
+        gson.fromJson(
+            request(
+                "coupons/exchange",
+                body = mapOf(
+                    "itemId" to itemId,
+                    "requestKey" to requestKey
+                ),
+                token = token
+            ),
+            CouponExchangeResult::class.java
+        ).also {
+            require(
+                it.point >= 0 &&
+                        it.coupon.id.isNotBlank() &&
+                        it.coupon.itemId == itemId
+            )
+        }
+    }
     private fun get(path: String): String = request(path)
 
     private fun request(path: String, body: Any? = null, token: String? = null,
@@ -133,13 +262,24 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                     throw SurveyApiException(when (status) {
                         401 -> if (path == "auth/login") "아이디와 비밀번호를 확인해주세요." else "로그인이 만료되었습니다. 다시 로그인해주세요."
                         409 -> when {
+                            path == "coupons/exchange" ->
+                                "포인트가 부족하거나 교환 요청이 충돌했습니다. 잔액을 새로고침해주세요."
                             path.endsWith("/responses") -> "이미 참여한 설문입니다."
                             path == "users/me" -> "이미 사용 중인 이메일입니다."
                             else -> "이미 사용 중인 아이디 또는 이메일입니다."
                         }
                         400 -> if (path.endsWith("/responses")) "설문이 마감되었거나 모집 인원이 찼을 수 있습니다. 설문 정보와 답변을 확인해주세요." else "입력 내용을 확인해주세요."
-                        404 -> "설문을 찾을 수 없습니다."
+                        404 -> if (path.contains("coupons")) {
+                            "쿠폰 또는 교환 상품을 찾을 수 없습니다."
+                        } else {
+                            "설문을 찾을 수 없습니다."
+                        }
                         403 -> "내가 만든 설문에만 접근할 수 있습니다."
+                        503 -> if (path == "coupons/exchange") {
+                            "교환 처리가 지연되고 있습니다. 같은 상품으로 다시 시도해주세요."
+                        } else {
+                            "서버가 일시적으로 응답하지 않습니다."
+                        }
                         else -> "요청에 실패했습니다. 잠시 후 다시 시도해주세요."
                     }, status)
                 }

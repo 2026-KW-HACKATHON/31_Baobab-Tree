@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.UUID
 
 data class UserProfile(val id: Int, val name: String, val email: String, val loginId: String, val point: Int,
     val ageGroup: String? = null, val region: String? = null)
@@ -35,31 +36,82 @@ class MyPageViewModel(
     var resultsError by mutableStateOf<String?>(null); private set
     var savingProfile by mutableStateOf(false); private set
     var profileError by mutableStateOf<String?>(null); private set
+
+    var coupons by mutableStateOf<List<WalletCoupon>>(emptyList())
+        private set
+
+    var exchangingCoupon by mutableStateOf(false)
+        private set
+
+    var couponError by mutableStateOf<String?>(null)
+        private set
+
+    private val pendingCouponRequests =
+        mutableMapOf<Pair<String, String>, String>()
+
+    fun clearCouponError() {
+        couponError = null
+    }
     fun clearProfileError() { profileError = null }
     private var generation = 0
     private var resultGeneration = 0
     private var closed = false
 
     fun load(token: String?) {
+        if (closed) return
+
         val request = ++generation
+
         closeResults()
-        profile = null; surveys = emptyList(); participationCount = 0; error = null
-        participations = emptyList(); sessionExpired = false
-        savingProfile = false; profileError = null
+        profile = null
+        surveys = emptyList()
+        participationCount = 0
+        participations = emptyList()
+        coupons = emptyList()
+        error = null
+        sessionExpired = false
+        savingProfile = false
+        profileError = null
         loading = token != null
-        if (token == null) return
+
+        if (token == null) {
+            couponError = null
+            return
+        }
+
         worker.submit {
             val response = runCatching {
                 val user = repository.getProfile(token)
-                Triple(user, repository.getSurveys().filter { it.userId == user.id }, repository.getParticipations(token))
+                val owned = repository.getSurveys()
+                    .filter { it.userId == user.id }
+                val history = repository.getParticipations(token)
+                val savedCoupons = repository.getCoupons(token)
+
+                Triple(user, owned, history) to savedCoupons
             }
+
             ui.execute {
                 if (!closed && request == generation) {
                     loading = false
-                    response.fold({ (user, owned, history) ->
-                        profile = user; surveys = owned; participationCount = history.size; participations = history
-                    }, { sessionExpired = it is SurveyApiException && it.status == 401
-                        error = it.message ?: "내 정보를 불러오지 못했습니다." })
+
+                    response.fold(
+                        onSuccess = { (accountData, savedCoupons) ->
+                            val (user, owned, history) = accountData
+
+                            profile = user
+                            surveys = owned
+                            participationCount = history.size
+                            participations = history
+                            coupons = savedCoupons
+                        },
+                        onFailure = {
+                            sessionExpired =
+                                it is SurveyApiException && it.status == 401
+
+                            error = it.message
+                                ?: "내 정보를 불러오지 못했습니다."
+                        }
+                    )
                 }
             }
         }
@@ -102,6 +154,75 @@ class MyPageViewModel(
                         success()
                     }, { sessionExpired = it is SurveyApiException && it.status == 401
                         profileError = it.message ?: "계정 정보를 저장하지 못했습니다." })
+                }
+            }
+        }
+    }
+    fun exchangeCoupon(
+        token: String,
+        itemId: String,
+        success: () -> Unit
+    ) {
+        if (closed || loading || exchangingCoupon) return
+
+        val currentProfile = profile ?: run {
+            couponError = "잔액을 불러온 뒤 다시 시도해주세요."
+            return
+        }
+
+        val requestGeneration = generation
+        val pendingKey = token to itemId
+
+        val requestKey = pendingCouponRequests.getOrPut(pendingKey) {
+            UUID.randomUUID().toString()
+        }
+
+        exchangingCoupon = true
+        couponError = null
+
+        worker.submit {
+            val response = runCatching {
+                repository.exchangeCoupon(
+                    token = token,
+                    itemId = itemId,
+                    requestKey = requestKey
+                )
+            }
+
+            ui.execute {
+                if (!closed) {
+                    exchangingCoupon = false
+
+                    // 성공한 요청은 끝났으므로 다음 교환에는 새 ID 사용
+                    if (response.isSuccess) {
+                        pendingCouponRequests.remove(pendingKey)
+                    }
+
+                    // 계정 변경 또는 화면 갱신으로 오래된 결과이면 반영하지 않음
+                    if (requestGeneration == generation) {
+                        response.fold(
+                            onSuccess = { result ->
+                                profile = currentProfile.copy(
+                                    point = result.point
+                                )
+
+                                coupons = listOf(result.coupon) +
+                                        coupons.filter {
+                                            it.id != result.coupon.id
+                                        }
+
+                                success()
+                            },
+                            onFailure = {
+                                sessionExpired =
+                                    it is SurveyApiException &&
+                                            it.status == 401
+
+                                couponError = it.message
+                                    ?: "쿠폰 교환에 실패했습니다."
+                            }
+                        )
+                    }
                 }
             }
         }

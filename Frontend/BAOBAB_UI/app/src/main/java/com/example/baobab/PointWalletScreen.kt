@@ -23,6 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 
 private val WalletGreen = Color(0xFF2F5539)
 private val WalletMuted = Color(0xFF697369)
@@ -38,16 +43,20 @@ private val ExchangeItems = listOf(
     ExchangeItem("바오밥 베이커리", "베이커리 1,000원 할인", 1000, "먹거리", Icons.Outlined.Restaurant)
 )
 
-class DemoWalletState {
-    var balance by mutableIntStateOf(3000)
-    val coupons = mutableStateListOf<Int>()
-}
+private val ExchangeItemIds = listOf(
+    "cafe-americano",
+    "snack-discount",
+    "book-discount",
+    "culture-priority",
+    "workshop-discount",
+    "bakery-discount"
+)
 
 @Composable
-fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, wallet: DemoWalletState,
-    onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit) {
+fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, coupons: List<WalletCoupon>, exchangeBusy: Boolean, exchangeError: String?, onExchange: (String, () -> Unit) -> Unit, paymentBusy: Boolean, paymentError: String?, onCharge: (String, Int) -> Unit, onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var selectedAmount by rememberSaveable { mutableIntStateOf(1000) }
+    var selectedProvider by rememberSaveable { mutableStateOf("KAKAOPAY") }
     var category by rememberSaveable { mutableStateOf("전체") }
     var exchanging by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirming by rememberSaveable { mutableStateOf(false) }
@@ -83,11 +92,31 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
             }
             if (tab == 0) {
                 Text("동네 포인트 교환소", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Surface(color = Color(0xFFF0E5CD), shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("체험용 잔액 %,d P".format(wallet.balance), fontWeight = FontWeight.Bold, color = WalletGreen)
-                        Text("3,000P로 교환을 체험해보세요. 실제 보유 포인트는 차감되지 않아요.", color = WalletMuted, fontSize = 13.sp)
-                        TextButton(onClick = { tab = 2 }) { Text("테스트 포인트 충전 →") }
+                Surface(
+                    color = Color(0xFFF0E5CD),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = point?.let {
+                                "교환 가능 잔액 %,d P".format(it)
+                            } ?: "잔액을 불러오는 중…",
+                            fontWeight = FontWeight.Bold,
+                            color = WalletGreen
+                        )
+
+                        Text(
+                            "쿠폰 교환 시 현재 보유 포인트에서 차감됩니다.",
+                            color = WalletMuted,
+                            fontSize = 13.sp
+                        )
+
+                        TextButton(onClick = { tab = 2 }) {
+                            Text("포인트 충전 →")
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -109,7 +138,7 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically) {
                                     Text("%,d P".format(item.cost), color = WalletGreen, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Button(onClick = { exchanging = index }, enabled = loggedIn) { Text("교환하기") }
+                                    Button(onClick = { exchanging = index }, enabled = loggedIn && !loading && !exchangeBusy && !paymentBusy && point != null) { Text("교환하기") }
                                 }
                             }
                         }
@@ -117,94 +146,377 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                 }
                 Text("상품과 매장은 임시 예시입니다. 교환한 쿠폰도 실제로 사용할 수 없어요.", color = WalletMuted, fontSize = 13.sp)
             } else if (tab == 1) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("내 쿠폰함", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("예시 ${wallet.coupons.size + 1}장", color = WalletMuted)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "내 쿠폰함",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("${coupons.size}장", color = WalletMuted)
                 }
-                Surface(color = Color.White, shape = RoundedCornerShape(24.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Surface(color = Color(0xFFEAF0E4), shape = RoundedCornerShape(16.dp)) {
-                            Icon(Icons.Outlined.Coffee, null, Modifier.padding(16.dp).size(32.dp), tint = WalletGreen)
+
+                if (!loggedIn) {
+                    Text("로그인하면 보유 쿠폰을 확인할 수 있어요.")
+                } else if (!loading && error == null && coupons.isEmpty()) {
+                    Text(
+                        "보유한 쿠폰이 없습니다. 교환소에서 쿠폰을 교환해보세요.",
+                        color = WalletMuted
+                    )
+                }
+
+                coupons.forEach { coupon ->
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.ConfirmationNumber,
+                                contentDescription = null,
+                                tint = WalletGreen
+                            )
+
+                            Text(
+                                coupon.shop,
+                                color = WalletMuted,
+                                fontSize = 13.sp
+                            )
+
+                            Text(
+                                coupon.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = WalletGreen
+                            )
+
+                            Text(
+                                "교환 포인트: %,d P".format(coupon.cost),
+                                color = WalletMuted
+                            )
+
+                            Text(
+                                if (coupon.status == "AVAILABLE") {
+                                    "보유 중"
+                                } else if (coupon.status == "USED") {
+                                    "사용 완료"
+                                } else {
+                                    "사용 불가"
+                                },
+                                color = WalletGreen
+                            )
+
+                            OutlinedButton(
+                                onClick = {
+                                    notice =
+                                        "${coupon.title}\n" +
+                                                "쿠폰 번호: ${coupon.id}\n" +
+                                                "현재 상품은 테스트 예시이며 실제 매장에서 사용할 수 없습니다."
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("쿠폰 보기")
+                            }
                         }
-                        Text("월계동 바오밥 카페", color = WalletMuted, fontSize = 14.sp)
-                        Text("아메리카노 500원 할인", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = WalletGreen)
-                        Text("카페에서 사용할 수 있는 할인 쿠폰이에요.", color = WalletMuted, fontSize = 14.sp)
-                        HorizontalDivider(color = Color(0xFFEAEDE5))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Outlined.ConfirmationNumber, null, tint = WalletGreen)
-                            Text("미리보기 쿠폰", fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(onClick = { notice = "예시 쿠폰이에요. 실제 교환·사용 기능은 준비 중입니다." },
-                            modifier = Modifier.fillMaxWidth()) { Text("쿠폰 보기") }
                     }
                 }
-                Text("현재는 예시 쿠폰입니다. 실제 매장에서 사용할 수 없어요.", color = WalletMuted, fontSize = 13.sp)
-                wallet.coupons.forEach { index ->
-                    val item = ExchangeItems[index]
-                    Surface(color = Color.White, shape = RoundedCornerShape(20.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(item.shop, color = WalletMuted, fontSize = 13.sp)
-                            Text(item.title, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = WalletGreen)
-                            Text("체험 교환 쿠폰 · %,d P".format(item.cost), color = WalletMuted)
-                            OutlinedButton(onClick = { notice = "${item.title}\n체험용 쿠폰입니다. 실제 사용 기능은 준비 중이에요." },
-                                modifier = Modifier.fillMaxWidth()) { Text("쿠폰 보기") }
-                        }
+
+                if (loggedIn) {
+                    OutlinedButton(
+                        onClick = onRetry,
+                        enabled = !loading && !exchangeBusy && !paymentBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("쿠폰함 새로고침")
                     }
                 }
             } else {
-                Text("포인트 충전", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "포인트 충전",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
                 Text("충전할 포인트를 선택해주세요", color = WalletMuted)
+
                 listOf(1000, 3000, 5000).forEach { amount ->
-                    Surface(onClick = { selectedAmount = amount }, shape = RoundedCornerShape(16.dp),
-                        color = if (selectedAmount == amount) Color(0xFFEAF0E4) else Color.White) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selectedAmount == amount, onClick = { selectedAmount = amount })
-                            Text("%,d P".format(amount), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Surface(
+                        onClick = {
+                            if (!paymentBusy) selectedAmount = amount
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selectedAmount == amount) {
+                            Color(0xFFEAF0E4)
+                        } else {
+                            Color.White
+                        }
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedAmount == amount,
+                                onClick = { selectedAmount = amount },
+                                enabled = !paymentBusy
+                            )
+                            Text(
+                                "%,d P / %,d원".format(amount, amount),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
                         }
                     }
                 }
-                Button(onClick = { confirming = true }, enabled = loggedIn, modifier = Modifier.fillMaxWidth()) {
-                    Text("%,d P 테스트 충전".format(selectedAmount))
+
+                Text("결제 수단", fontWeight = FontWeight.Bold)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    PaymentProviderButton(
+                        title = "카카오페이",
+                        logoRes = R.drawable.kakaopay_logo,
+                        selected = selectedProvider == "KAKAOPAY",
+                        enabled = !paymentBusy,
+                        onClick = {
+                            selectedProvider = "KAKAOPAY"
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    PaymentProviderButton(
+                        title = "토스페이먼츠",
+                        logoRes = R.drawable.tosspayments_logo,
+                        selected = selectedProvider == "TOSS",
+                        enabled = !paymentBusy,
+                        onClick = {
+                            selectedProvider = "TOSS"
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                Surface(color = Color(0xFFF0E5CD), shape = RoundedCornerShape(16.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("체험용 잔액: %,d P".format(wallet.balance), fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { wallet.balance = 3000; wallet.coupons.clear() }) { Text("교환 체험 초기화") }
-                    }
+
+                if (paymentError != null) {
+                    Text(
+                        paymentError,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
-                Text("실제 결제 없이 충전 흐름만 체험합니다. 테스트 잔액은 보유 포인트와 별도이며 서버에 저장되지 않습니다.",
-                    color = WalletMuted, fontSize = 13.sp)
+
+                Button(
+                    onClick = { confirming = true },
+                    enabled = loggedIn && !paymentBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (paymentBusy) "결제 준비 중…"
+                        else "%,d P 충전하기".format(selectedAmount)
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onRetry,
+                    enabled = loggedIn && !loading && !paymentBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("잔액 새로고침")
+                }
+
+                Text(
+                    "현재는 테스트 결제입니다. 실제 돈은 차감되지 않으며, " +
+                            "승인된 충전 포인트는 서버에 저장됩니다.",
+                    color = WalletMuted,
+                    fontSize = 13.sp
+                )
             }
         }
     }
-    if (confirming) AlertDialog(onDismissRequest = { confirming = false },
-        title = { Text("테스트 충전") },
-        text = { Text("%,d P를 테스트 잔액에 추가할까요? 실제 결제는 발생하지 않습니다.".format(selectedAmount)) },
-        confirmButton = { TextButton(onClick = {
-            wallet.balance = (wallet.balance.toLong() + selectedAmount).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            confirming = false
-            notice = "테스트 충전이 완료되었습니다."
-        }) { Text("충전하기") } },
-        dismissButton = { TextButton(onClick = { confirming = false }) { Text("취소") } })
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("포인트 충전") },
+            text = {
+                val providerName = if (selectedProvider == "KAKAOPAY") {
+                    "카카오페이"
+                } else {
+                    "토스페이먼츠"
+                }
+
+                Text(
+                    "$providerName 결제창으로 이동합니다.\n" +
+                            "%,d원으로 %,d포인트를 충전합니다.\n".format(
+                                selectedAmount,
+                                selectedAmount
+                            ) +
+                            "현재는 테스트 결제로 실제 출금되지 않습니다."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !paymentBusy,
+                    onClick = {
+                        confirming = false
+                        onCharge(selectedProvider, selectedAmount)
+                    }
+                ) {
+                    Text("결제창 열기")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
     exchanging?.let { index ->
         val item = ExchangeItems[index]
-        val enough = wallet.balance >= item.cost
-        AlertDialog(onDismissRequest = { exchanging = null }, title = { Text(if (enough) "쿠폰으로 교환하기" else "체험 포인트가 부족해요") },
-            text = { Text(if (enough) "${item.title}\n체험용 %,d P를 차감하고 쿠폰함에 추가합니다.".format(item.cost)
-                else "필요 %,d P · 체험 잔액 %,d P\n충전 화면에서 테스트 포인트를 추가해주세요.".format(item.cost, wallet.balance)) },
-            confirmButton = { TextButton(onClick = {
-                if (enough && loggedIn) {
-                    wallet.balance -= item.cost
-                    wallet.coupons.add(index)
-                    tab = 1
-                    notice = "쿠폰함에 체험 쿠폰을 추가했어요."
-                } else tab = 2
-                exchanging = null
-            }) { Text(if (enough) "교환하기" else "충전하기") } },
-            dismissButton = { TextButton(onClick = { exchanging = null }) { Text("취소") } })
+        val balance = point
+        val enough = balance != null && balance >= item.cost
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!exchangeBusy) exchanging = null
+            },
+            title = {
+                Text(
+                    if (enough) "쿠폰으로 교환하기"
+                    else "포인트가 부족해요"
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(item.title)
+
+                    Text(
+                        if (enough) {
+                            "%,d P가 보유 포인트에서 차감됩니다.".format(item.cost)
+                        } else {
+                            "필요 %,d P · 보유 %,d P".format(
+                                item.cost,
+                                balance ?: 0
+                            )
+                        }
+                    )
+
+                    if (exchangeError != null) {
+                        Text(
+                            exchangeError,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = loggedIn &&
+                            !loading &&
+                            !exchangeBusy &&
+                            !paymentBusy,
+                    onClick = {
+                        if (enough) {
+                            onExchange(ExchangeItemIds[index]) {
+                                exchanging = null
+                                tab = 1
+                                notice = "쿠폰 교환이 완료됐습니다."
+                            }
+                        } else {
+                            exchanging = null
+                            tab = 2
+                        }
+                    }
+                ) {
+                    Text(
+                        if (exchangeBusy) "교환 중…"
+                        else if (enough) "교환하기"
+                        else "충전하기"
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !exchangeBusy,
+                    onClick = { exchanging = null }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
     }
     notice?.let { message -> AlertDialog(onDismissRequest = { notice = null },
         title = { Text("안내") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = { notice = null }) { Text("확인") } }) }
+}
+@Composable
+private fun PaymentProviderButton(
+    title: String,
+    logoRes: Int,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) {
+            Color(0xFFE8DEF8)
+        } else {
+            Color.Transparent
+        },
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) {
+                WalletGreen
+            } else {
+                Color(0xFFCCC5D3)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 80.dp)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(
+                space = 8.dp,
+                alignment = Alignment.CenterVertically
+            )
+        ) {
+            Image(
+                painter = painterResource(logoRes),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .width(96.dp)
+                    .height(24.dp)
+            )
+
+            Text(
+                text = title,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) {
+                    Color(0xFF242424)
+                } else {
+                    WalletMuted
+                }
+            )
+        }
+    }
 }
