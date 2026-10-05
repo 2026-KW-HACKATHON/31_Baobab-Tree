@@ -24,6 +24,7 @@ model User {
   responses      Response[]
   pointHistories PointHistory[]
   paymentOrders PaymentOrder[]
+  coupons Coupon[]
 
   @@map("USER")
 }
@@ -137,4 +138,22 @@ model PaymentOrder {
   @@unique([provider, providerRef])
   @@index([userId, createdAt])
   @@map("PAYMENT_ORDER")
+}
+model Coupon {
+  id         String    @id @default(uuid())
+  userId     Int       @map("user_id")
+  itemId     String    @map("item_id")
+  shop       String
+  title      String
+  cost       Int
+  status     String    @default("AVAILABLE")
+  requestKey String    @map("request_key")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  usedAt     DateTime? @map("used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, requestKey])
+  @@index([userId, createdAt])
+  @@map("COUPON")
 }
