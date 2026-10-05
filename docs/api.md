@@ -10,9 +10,9 @@ Run these commands from the repository root:
 
 ```powershell
 npm ci
-npm run db:validate
+npm run db:validate:local
 npm run db:generate
-npm run db:push
+npm run db:push:local
 npm start
 ```
 
@@ -263,3 +263,4 @@ Creating a survey charges the author rewardPoint × targetCount in the same tran
 DELETE /surveys/:id refunds max(0, fundedReward - response count × rewardPoint) to the author, records a positive PointHistory entry and deletes the survey in one transaction. It returns { message: "Survey deleted", refundPoint }. Already-paid participant points remain unchanged. Repeated deletion returns 404 and never refunds again. Existing uncharged surveys have fundedReward = 0 and do not qualify for refunds.
 
 For an existing database, stop the server and run npm run db:migrate:reward-refund, then npm run db:generate. The migration backs up the database and identifies previous registration charges by author, amount, title and creation time. Ambiguous historic charges abort migration for manual reconciliation. Apply db:migrate:survey-fields first if needed.
+PostgreSQL 운영 배포·데이터 이전은 [배포 안내](../docs/deployment.md)를 참고하세요.

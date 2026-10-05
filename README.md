@@ -1,3 +1,7 @@
+> Vercel + PostgreSQL 배포 설정은 [배포 안내](docs/deployment.md)를 참고하세요.
+> 기존 SQLite 개발 환경은 유지하며 운영 서버는 PostgreSQL을 사용합니다.
+> DB 이전은 빈 PostgreSQL에 마이그레이션 적용 후 `npm run db:import:sqlite`로 실행합니다.
+
 앱 UI 디자인입니다.
 
 Figma에서 UI 확인 -->> https://www.figma.com/design/YlrTtwqU9dGNxHzrSiRfX8/%EC%A0%9C%EB%AA%A9-%EC%97%86%EC%9D%8C?node-id=0-1&m=dev

@@ -1,4 +1,5 @@
 const express = require('express');
+const { transaction } = require('../lib/transaction');
 const { randomBytes, createHash } = require('node:crypto');
 const { SurveyService } = require('../services/survey.service');
 const auth = require('../middlewares/auth.middleware');
@@ -101,6 +102,11 @@ function createSurveyRouter(service = new SurveyService()) {
     }
   };
 
+  router.get('/health', handle(200, async () => {
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'ok', database: 'connected' };
+  }));
+
   // 브라우저 결제 페이지의 응답 설정
   function paymentPage(req, res, next) {
     res.set('Cache-Control', 'no-store');
@@ -138,7 +144,7 @@ function createSurveyRouter(service = new SurveyService()) {
       ? new Date(approvedAtValue)
       : now;
 
-    await prisma.$transaction(async tx => {
+    await transaction(prisma, async tx => {
       const credited = await tx.paymentOrder.updateMany({
         where: {
           id: order.id,
@@ -1175,7 +1181,7 @@ function createSurveyRouter(service = new SurveyService()) {
               let result;
 
               try {
-                result = await prisma.$transaction(async tx => {
+                result = await transaction(prisma, async tx => {
                   // 잔액 확인과 차감을 하나의 DB 명령으로 처리
                   const deducted = await tx.user.updateMany({
                     where: {

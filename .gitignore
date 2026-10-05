@@ -40,3 +40,7 @@ local.properties
 # Local database migration backups
 prisma/dev.before-*.db
 .env.production
+
+# Vercel local state and private environment files
+.vercel/
+.env.*.local

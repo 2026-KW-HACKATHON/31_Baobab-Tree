@@ -1,4 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const { getPrisma } = require('../lib/prisma');
+const { transaction } = require('../lib/transaction');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/auth');
@@ -85,7 +86,7 @@ function surveyData(data, partial = false) {
 }
 
 class SurveyService {
-  constructor(prisma = new PrismaClient()) { this.prisma = prisma; }
+  constructor(prisma = getPrisma()) { this.prisma = prisma; }
 
   async signup(data) {
     const email = text(data.email, 'email');
@@ -189,7 +190,7 @@ class SurveyService {
     if (reward > 0 && target === 0) fail(400, '포인트 보상이 있는 설문은 지급 인원을 지정해주세요.');
     const budget = reward * target;
     if (!Number.isSafeInteger(budget) || budget > 2147483647) fail(400, '리워드 총액이 너무 큽니다.');
-    return this.prisma.$transaction(async tx => {
+    return transaction(this.prisma, async tx => {
       if (budget > 0) {
         const deducted = await tx.user.updateMany({ where: { id: id(userId), point: { gte: budget } },
           data: { point: { decrement: budget } } });
@@ -215,7 +216,7 @@ class SurveyService {
   }
 
   async deleteSurvey(userId, surveyId) {
-    return this.prisma.$transaction(async tx => {
+    return transaction(this.prisma, async tx => {
       const survey = await tx.survey.findUnique({ where: { id: id(surveyId) } });
       if (!survey) fail(404, 'Survey not found');
       if (survey.userId !== id(userId)) fail(403, 'Only the author can perform this action');
@@ -266,7 +267,7 @@ class SurveyService {
     const participantId = id(userId);
     const targetSurveyId = id(surveyId);
     if (!Array.isArray(answers)) fail(400, 'answers must be an array');
-    return this.prisma.$transaction(async tx => {
+    return transaction(this.prisma, async tx => {
       const survey = await tx.survey.findUnique({ where: { id: targetSurveyId }, include: surveyInclude });
       if (!survey) fail(404, 'Survey not found');
       if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date())) fail(400, 'Survey is closed');

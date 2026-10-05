@@ -9,7 +9,7 @@
 
 ```powershell
 npm ci
-npm run db:push
+npm run db:push:local
 npm start
 ```
 
@@ -18,6 +18,7 @@ npm start
 등록 요청 예시는 [API 문서](../../docs/api.md)에 있습니다.
 
 기본 API 주소는 `http://10.0.2.2:5000/api/`입니다.
+Vercel + PostgreSQL 배포와 기존 데이터 이전은 [배포 안내](../../docs/deployment.md)를 참고하세요.
 Android 에뮬레이터에서 개발 PC의 로컬 서버를 사용하는 설정입니다.
 Android 17(API 37) 이상에서는 로컬 서버 접속을 위해 앱이 요청하는
 `주변 기기` 권한을 허용하세요. 권한이 없으면 서버 조회 전에 안내 화면을 표시합니다.

@@ -4,24 +4,47 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { PrismaClient } = require('@prisma/client');
 const { SurveyService } = require('../src/services/survey.service');
 const { createApp } = require('../src/app');
 
 test('schema-backed API integration', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'baobab-api-'));
   const schemaPath = path.join(directory, 'schema.prisma');
-  fs.copyFileSync(path.join(__dirname, '../prisma/schema.prisma'), schemaPath);
-  const prisma = new PrismaClient({ datasources: { db: { url: `file:${path.join(directory, 'dev.db').replaceAll('\\', '/')}` } } });
+  const postgres = process.env.BAOBAB_TEST_POSTGRES === '1';
+  const testSchema = 'baobab_test_' + require('node:crypto').randomBytes(12).toString('hex');
+  let url;
+  if (postgres) {
+    url = new URL(process.env.TEST_DATABASE_URL);
+    assert.ok(['postgres:', 'postgresql:'].includes(url.protocol));
+    url.searchParams.set('schema', testSchema);
+    url = url.toString();
+  } else {
+    url = `file:${path.join(directory, 'dev.db').replaceAll('\\', '/')}`;
+  }
+  const { PrismaClient } = require(postgres ? '@prisma/client' : '../node_modules/.prisma/baobab-sqlite');
+  const prisma = new PrismaClient({ datasources: { db: { url } } });
   let server;
   t.after(async () => {
     if (server) await new Promise(resolve => server.close(resolve));
-    await prisma.$disconnect();
-    // Only remove this test's randomly generated temporary directory.
-    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-    fs.rmSync(directory, { recursive: true, force: true });
+    try {
+      if (postgres) {
+        assert.match(testSchema, /^baobab_test_[a-f0-9]{24}$/);
+        await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${testSchema}" CASCADE`);
+      }
+    } finally {
+      await prisma.$disconnect();
+      assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
-  execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--schema', schemaPath, '--skip-generate'], { stdio: 'pipe' });
+  if (postgres) {
+    execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], {
+      cwd: path.join(__dirname, '..'), stdio: 'pipe', env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
+    });
+  } else {
+    fs.copyFileSync(path.join(__dirname, '../prisma/schema.sqlite.prisma'), schemaPath);
+    execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--schema', schemaPath, '--skip-generate'], { stdio: 'pipe' });
+  }
   server = createApp(new SurveyService(prisma)).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}/api`;
@@ -284,4 +307,89 @@ test('schema-backed API integration', async t => {
     assert.equal(await prisma.question.count(), 0);
     assert.equal(await prisma.response.count(), 0);
   });
+  await t.test('coupon exchange deducts once and replays the same request without another charge', async () => {
+    await prisma.user.update({ where: { id: author.id }, data: { point: 1000 } });
+    const body = { itemId: 'cafe-americano', requestKey: require('node:crypto').randomUUID() };
+    const first = await request('POST', '/coupons/exchange', body, token);
+    assert.equal(first.status, 201);
+    assert.equal(first.data.point, 500);
+    const second = await request('POST', '/coupons/exchange', body, token);
+    assert.equal(second.status, 200);
+    assert.equal(second.data.coupon.id, first.data.coupon.id);
+    assert.equal(second.data.alreadyProcessed, true);
+    assert.equal((await request('POST', '/coupons/exchange', { ...body, itemId: 'book-discount' }, token)).status, 409);
+    assert.equal((await request('POST', '/coupons/exchange', { itemId: 'book-discount', requestKey: require('node:crypto').randomUUID() }, token)).status, 409);
+    assert.equal(await prisma.coupon.count({ where: { userId: author.id } }), 1);
+    assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, 500);
+  });
+
+  await t.test('Toss checkout uses public callbacks and approved orders credit exactly once', async () => {
+    const names = ['TOSS_CLIENT_KEY', 'TOSS_SECRET_KEY', 'PAYMENT_PUBLIC_BASE_URL'];
+    const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+    const originalFetch = global.fetch;
+    let confirmations = 0;
+    let providerPayment;
+    try {
+      process.env.TOSS_CLIENT_KEY = 'test_ck_contract';
+      process.env.TOSS_SECRET_KEY = 'test_sk_contract';
+      process.env.PAYMENT_PUBLIC_BASE_URL = 'https://baobab-test.example';
+      global.fetch = async (url, options) => {
+        if (String(url).startsWith('https://api.tosspayments.com/')) {
+          if (String(url).endsWith('/confirm')) confirmations++;
+          return new Response(JSON.stringify(providerPayment), { headers: { 'Content-Type': 'application/json' } });
+        }
+        return originalFetch(url, options);
+      };
+      const before = (await prisma.user.findUnique({ where: { id: author.id } })).point;
+      const created = await request('POST', '/payments/orders', { provider: 'TOSS', amount: 1000 }, token);
+      assert.equal(created.status, 201);
+      const order = created.data;
+      assert.equal((await request('GET', `/payments/orders/${order.id}`, undefined, participantToken)).status, 404);
+      const ready = await request('POST', `/payments/orders/${order.id}/toss/ready`, { callbackToken: order.callbackToken }, token);
+      assert.equal(ready.status, 200);
+      assert.ok(ready.data.checkoutUrl.startsWith('https://baobab-test.example/api/payments/toss/checkout?'));
+      const checkout = await fetch(base + '/payments/toss/checkout' + new URL(ready.data.checkoutUrl).search);
+      assert.equal(checkout.status, 200);
+      assert.match(await checkout.text(), /https:\/\/baobab-test\.example\/api\/payments\/toss\/success/);
+      providerPayment = { paymentKey: 'test-payment-' + order.id, orderId: order.id, totalAmount: 1000, currency: 'KRW', status: 'DONE', approvedAt: new Date().toISOString() };
+      const query = new URLSearchParams({ orderId: order.id, state: order.callbackToken, paymentKey: providerPayment.paymentKey, amount: '1000' });
+      assert.equal((await fetch(base + '/payments/toss/success?' + query)).status, 200);
+      assert.equal((await fetch(base + '/payments/toss/success?' + query)).status, 200);
+      assert.equal(confirmations, 1);
+      assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, before + 1000);
+      assert.equal(await prisma.pointHistory.count({ where: { paymentOrderId: order.id } }), 1);
+      query.set('amount', '3000');
+      assert.equal((await fetch(base + '/payments/toss/success?' + query)).status, 400);
+      assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, before + 1000);
+    } finally {
+      global.fetch = originalFetch;
+      for (const name of names) {
+        if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name];
+      }
+    }
+  });
+
+  await t.test('PostgreSQL concurrent participation cannot exceed the funded capacity', { skip: !postgres }, async () => {
+    const other = (await request('POST', '/auth/signup', { loginId: 'concurrent', name: 'Concurrent', email: 'concurrent@example.test', password })).data.user;
+    const otherToken = (await request('POST', '/auth/login', { loginId: other.loginId, password })).data.accessToken;
+    const created = await request('POST', '/surveys', { title: 'One seat', rewardPoint: 100, targetCount: 1, questions: [{ question: 'Why?', questionType: 'short' }] }, token);
+    assert.equal(created.status, 201);
+    const answer = { answers: [{ questionId: created.data.questions[0].id, answer: 'Answer' }] };
+    const results = await Promise.all([participantToken, otherToken].map(auth => request('POST', `/surveys/${created.data.id}/responses`, answer, auth)));
+    assert.deepEqual(results.map(result => result.status).sort(), [201, 400]);
+    assert.equal(await prisma.response.count({ where: { surveyId: created.data.id } }), 1);
+    assert.equal((await prisma.survey.findUnique({ where: { id: created.data.id } })).currentCount, 1);
+    assert.equal((await request('DELETE', `/surveys/${created.data.id}`, undefined, token)).data.refundPoint, 0);
+  });
+
+  await t.test('PostgreSQL simultaneous coupon replays cannot charge twice', { skip: !postgres }, async () => {
+    const before = (await prisma.user.findUnique({ where: { id: author.id } })).point;
+    const body = { itemId: 'cafe-americano', requestKey: require('node:crypto').randomUUID() };
+    const results = await Promise.all([1, 2].map(() => request('POST', '/coupons/exchange', body, token)));
+    assert.deepEqual(results.map(result => result.status).sort(), [200, 201]);
+    assert.equal(results[0].data.coupon.id, results[1].data.coupon.id);
+    assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, before - 500);
+    assert.equal(await prisma.coupon.count({ where: { userId: author.id, requestKey: body.requestKey } }), 1);
+  });
+
 });

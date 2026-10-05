@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "express",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build:vercel",
+  "functions": {
+    "src/app.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/.prisma/client/**"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { getPrisma } = require('../src/lib/prisma');
 const bcrypt = require('bcryptjs');
 const { randomBytes } = require('node:crypto');
 
@@ -42,7 +42,7 @@ async function seedExamples(prisma) {
 }
 
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = getPrisma();
   seedExamples(prisma).then(result => console.log(JSON.stringify(result)))
     .catch(error => { console.error(error.message); process.exitCode = 1; })
     .finally(() => prisma.$disconnect());

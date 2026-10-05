@@ -1,4 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+// This script upgrades the existing local SQLite file only.
+const { PrismaClient } = require('../node_modules/.prisma/baobab-sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 const prisma = new PrismaClient();

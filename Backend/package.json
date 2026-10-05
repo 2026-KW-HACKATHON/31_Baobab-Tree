@@ -8,7 +8,9 @@
     "test": "npm --prefix .. test",
     "db:generate": "npm --prefix .. run db:generate",
     "db:validate": "npm --prefix .. run db:validate",
-    "db:push": "npm --prefix .. run db:push"
+    "db:push": "npm --prefix .. run db:push",
+    "db:migrate:deploy": "npm --prefix .. run db:migrate:deploy",
+    "db:push:local": "npm --prefix .. run db:push:local"
   },
   "keywords": [],
   "author": "",

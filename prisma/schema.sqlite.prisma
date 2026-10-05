@@ -1,14 +1,13 @@
 // DB 연결 세팅
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 generator client {
   provider = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  output = "../node_modules/.prisma/baobab-sqlite"
 }
 
 model User {

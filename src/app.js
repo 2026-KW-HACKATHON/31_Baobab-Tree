@@ -23,5 +23,7 @@ function createApp(service) {
 function start() {
   return createApp().listen(process.env.PORT || 5000, () => console.log('Survey API is running'));
 }
+module.exports = createApp();
 if (require.main === module) start();
-module.exports = { createApp, start };
+module.exports.createApp = createApp;
+module.exports.start = start;

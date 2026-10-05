@@ -7,12 +7,18 @@
     "start": "node src/app.js",
     "db:seed:examples": "node scripts/seed-examples.js",
     "test": "node --test test/*.test.js",
-    "db:generate": "prisma generate",
+    "db:generate": "node scripts/generate-clients.js",
     "db:migrate:survey-fields": "node scripts/migrate-survey-fields.js",
     "db:validate": "prisma validate",
     "db:push": "prisma db push",
-    "postinstall": "prisma generate",
-    "db:migrate:reward-refund": "node scripts/migrate-reward-refund.js"
+    "postinstall": "node scripts/generate-clients.js",
+    "db:migrate:reward-refund": "node scripts/migrate-reward-refund.js",
+    "build:vercel": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:push:local": "prisma db push --schema prisma/schema.sqlite.prisma",
+    "db:validate:local": "prisma validate --schema prisma/schema.sqlite.prisma",
+    "test:postgres": "node scripts/test-postgres.js",
+    "db:import:sqlite": "node scripts/import-sqlite.js"
   },
   "keywords": [],
   "author": "",
@@ -28,5 +34,8 @@
   },
   "devDependencies": {
     "prisma": "^5.22.0"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

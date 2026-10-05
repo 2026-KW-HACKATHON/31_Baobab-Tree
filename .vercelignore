@@ -1,0 +1,8 @@
+Frontend/
+Backend/
+test/
+docs/
+.env*
+prisma/*.db
+prisma/*.db-*
+prisma/dev.before-*.db
