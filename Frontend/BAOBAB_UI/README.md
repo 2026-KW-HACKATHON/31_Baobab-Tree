@@ -85,3 +85,31 @@ MY에서 참여한 설문과 내가 제출한 답변도 조회합니다.
 릴리스 빌드는 `-PreleaseApiBaseUrl=https://<실제-도메인>/api/`를 반드시 지정해야 합니다.
 주소 미설정·HTTP·로컬 개발 주소는 빌드 단계에서 거절합니다.
 운영 서버의 JWT_SECRET 설정과 실행 순서는 [배포 안내](../../docs/deployment.md)를 참고하세요.
+
+토스 테스트 결제는 서버 실행 위치의 `.env`에 아래 설정이 필요합니다. 저장소 루트에서
+`npm start`를 실행한다면 저장소 루트의 `.env`를 사용합니다. 실제 키는 커밋하지 않습니다.
+
+```dotenv
+TOSS_CLIENT_KEY=<API 개별 연동 테스트 클라이언트 키: test_ck_로 시작>
+TOSS_SECRET_KEY=<같은 상점의 테스트 시크릿 키: test_sk_로 시작>
+PAYMENT_PUBLIC_BASE_URL=<결제 브라우저가 접근할 수 있는 서버 주소, /api 제외>
+```
+
+Android 에뮬레이터에서 이 PC의 서버를 이용할 때 연결 주소 예시는
+`http://10.0.2.2:5000`입니다. 실기기는 PC의 LAN 주소나 외부에서 접근 가능한 서버 주소를
+사용해야 합니다. 키나 주소를 바꾼 후에는 서버를 재시작합니다.
+카카오페이는 별도로 `KAKAOPAY_SECRET_KEY`, `KAKAOPAY_CID`를 설정합니다.
+
+기존 DB에 결제·쿠폰 테이블이 없다면 서버를 멈춘 뒤 저장소 루트에서 다음을 실행합니다.
+마이그레이션 스크립트는 기존 DB 백업을 만든 다음 테이블을 추가합니다.
+
+```powershell
+node scripts/migrate-payment-orders.js
+node scripts/migrate-coupons.js
+npm run db:generate
+npm start
+```
+
+결제 API의 설정 오류는 `TOSS_NOT_CONFIGURED`, `KAKAO_NOT_CONFIGURED`,
+`PAYMENT_URL_NOT_CONFIGURED` 코드로 구분합니다. 앱에는 설정 안내를 표시하고,
+그 밖의 서버 내부 오류는 상세 내용을 노출하지 않습니다.

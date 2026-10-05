@@ -259,6 +259,19 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             client.newCall(builder.build()).execute().use { response ->
                 val status = response.code
                 if (status !in 200..299) {
+                    if (path.startsWith("payments/")) {
+                        val paymentCode = runCatching {
+                            gson.fromJson(response.body.string(), com.google.gson.JsonObject::class.java)
+                                ?.get("code")?.asString
+                        }.getOrNull()
+                        val paymentMessage = when (paymentCode) {
+                            "TOSS_NOT_CONFIGURED" -> "토스 결제 연동 설정이 완료되지 않았습니다. 관리자에게 문의해주세요."
+                            "PAYMENT_URL_NOT_CONFIGURED" -> "결제창 연결 주소가 설정되지 않았습니다. 관리자에게 문의해주세요."
+                            "KAKAO_NOT_CONFIGURED" -> "카카오페이 결제 연동 설정이 완료되지 않았습니다. 관리자에게 문의해주세요."
+                            else -> null
+                        }
+                        if (paymentMessage != null) throw SurveyApiException(paymentMessage, status)
+                    }
                     throw SurveyApiException(when (status) {
                         401 -> if (path == "auth/login") "아이디와 비밀번호를 확인해주세요." else "로그인이 만료되었습니다. 다시 로그인해주세요."
                         409 -> when {
@@ -277,6 +290,8 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                         403 -> "내가 만든 설문에만 접근할 수 있습니다."
                         503 -> if (path == "coupons/exchange") {
                             "교환 처리가 지연되고 있습니다. 같은 상품으로 다시 시도해주세요."
+                        } else if (path.startsWith("payments/")) {
+                            "결제 서비스를 사용할 수 없습니다. 결제 연동 설정을 확인해주세요."
                         } else {
                             "서버가 일시적으로 응답하지 않습니다."
                         }

@@ -408,6 +408,32 @@ class SurveyRepositoryTest {
     }
 
     @Test
+    fun paymentConfigurationErrorsRemainDistinctAndOldServersHavePaymentFallback() {
+        status = 503
+        for ((code, message) in listOf(
+            "TOSS_NOT_CONFIGURED" to "토스 결제 연동 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.",
+            "PAYMENT_URL_NOT_CONFIGURED" to "결제창 연결 주소가 설정되지 않았습니다. 관리자에게 문의해주세요."
+        )) {
+            body = """{"code":"$code","error":"configuration unavailable"}"""
+            val failure = assertThrows(SurveyApiException::class.java) {
+                repository.preparePointPayment("session-token", "TOSS", 1000)
+            }
+            assertEquals(message, failure.message)
+            assertEquals(503, failure.status)
+        }
+        for (legacyBody in listOf("""{"error":"Internal server error"}""", "<html>Unavailable</html>")) {
+            body = legacyBody
+            val failure = assertThrows(SurveyApiException::class.java) {
+                repository.preparePointPayment("session-token", "TOSS", 1000)
+            }
+            assertEquals("결제 서비스를 사용할 수 없습니다. 결제 연동 설정을 확인해주세요.", failure.message)
+        }
+        body = """{"code":"TOSS_NOT_CONFIGURED"}"""
+        assertEquals("서버가 일시적으로 응답하지 않습니다.",
+            assertThrows(SurveyApiException::class.java) { repository.getSurveys() }.message)
+    }
+
+    @Test
     fun httpErrorsAndMalformedPayloadsAreFailuresNotEmptyLists() {
         status = 404
         assertThrows(SurveyApiException::class.java) { repository.getSurvey("7") }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Coffee
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.Restaurant
@@ -20,6 +21,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -284,6 +287,8 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                     PaymentProviderButton(
                         title = "카카오페이",
                         logoRes = R.drawable.kakaopay_logo,
+                        brandColor = Color(0xFFFFE500),
+                        contentColor = Color(0xFF191919),
                         selected = selectedProvider == "KAKAOPAY",
                         enabled = !paymentBusy,
                         onClick = {
@@ -295,6 +300,8 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                     PaymentProviderButton(
                         title = "토스페이먼츠",
                         logoRes = R.drawable.tosspayments_logo,
+                        brandColor = Color(0xFF0064FF),
+                        contentColor = Color.White,
                         selected = selectedProvider == "TOSS",
                         enabled = !paymentBusy,
                         onClick = {
@@ -461,6 +468,8 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
 private fun PaymentProviderButton(
     title: String,
     logoRes: Int,
+    brandColor: Color,
+    contentColor: Color,
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -471,24 +480,20 @@ private fun PaymentProviderButton(
         enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) {
-            Color(0xFFE8DEF8)
-        } else {
-            Color.Transparent
-        },
+        color = brandColor.copy(alpha = if (enabled) 1f else 0.5f),
         border = BorderStroke(
             width = if (selected) 2.dp else 1.dp,
             color = if (selected) {
-                WalletGreen
+                contentColor
             } else {
-                Color(0xFFCCC5D3)
+                brandColor
             }
         )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 80.dp)
+                .heightIn(min = 112.dp)
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(
@@ -496,27 +501,29 @@ private fun PaymentProviderButton(
                 alignment = Alignment.CenterVertically
             )
         ) {
-            Image(
-                painter = painterResource(logoRes),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .width(96.dp)
-                    .height(24.dp)
-            )
+            Box(Modifier.fillMaxWidth().height(40.dp).clipToBounds(), contentAlignment = Alignment.Center) {
+                Image(
+                    painter = painterResource(logoRes),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.requiredSize(
+                        if (logoRes == R.drawable.tosspayments_logo) 180.dp else 100.dp,
+                        if (logoRes == R.drawable.tosspayments_logo) 90.dp else 36.dp
+                    ),
+                    colorFilter = if (logoRes == R.drawable.tosspayments_logo) ColorFilter.tint(Color.White) else null
+                )
+            }
 
-            Text(
-                text = title,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (enabled) {
-                    Color(0xFF242424)
-                } else {
-                    WalletMuted
-                }
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (selected) Icon(Icons.Outlined.CheckCircle, "선택됨", tint = contentColor, modifier = Modifier.size(16.dp))
+                Text(
+                    text = title,
+                    textAlign = TextAlign.Center,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
+                )
+            }
         }
     }
 }

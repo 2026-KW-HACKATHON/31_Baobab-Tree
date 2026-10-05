@@ -5,8 +5,8 @@ const auth = require('../middlewares/auth.middleware');
 
 const allowedAmounts = [1000, 3000, 5000];
 
-function fail(status, message) {
-  throw Object.assign(new Error(message), { status });
+function fail(status, message, code) {
+  throw Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
 }
 
 function hashToken(token) {
@@ -26,7 +26,7 @@ function publicBaseUrl() {
   const value = process.env.PAYMENT_PUBLIC_BASE_URL?.trim();
 
   if (!value) {
-    fail(503, 'PAYMENT_PUBLIC_BASE_URL을 설정해주세요.');
+    fail(503, '결제창 연결 주소가 설정되지 않았습니다.', 'PAYMENT_URL_NOT_CONFIGURED');
   }
 
   return value.replace(/\/+$/, '');
@@ -37,7 +37,7 @@ function kakaoConfig() {
   const cid = process.env.KAKAOPAY_CID?.trim();
 
   if (!secretKey || !cid) {
-    fail(503, '카카오페이 환경변수 설정을 확인해주세요.');
+    fail(503, '카카오페이 결제 연동 설정이 완료되지 않았습니다.', 'KAKAO_NOT_CONFIGURED');
   }
 
   return { secretKey, cid };
@@ -47,7 +47,7 @@ function tossClientKey() {
   const key = process.env.TOSS_CLIENT_KEY?.trim();
 
   if (!key?.startsWith('test_ck_')) {
-    fail(503, '토스 API 개별 연동 테스트 클라이언트 키를 확인해주세요.');
+    fail(503, '토스 결제 연동 설정이 완료되지 않았습니다.', 'TOSS_NOT_CONFIGURED');
   }
 
   return key;

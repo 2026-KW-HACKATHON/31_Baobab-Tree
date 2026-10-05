@@ -12,10 +12,11 @@ function createApp(service) {
   app.use((err, req, res, next) => {
     const suppliedStatus = err.status || ({ P2002: 409, P2025: 404, P2003: 400 }[err.code]);
     const status = Number.isInteger(suppliedStatus) && suppliedStatus >= 400 && suppliedStatus < 600 ? suppliedStatus : 500;
+    const paymentConfigError = status === 503 && ['TOSS_NOT_CONFIGURED', 'KAKAO_NOT_CONFIGURED', 'PAYMENT_URL_NOT_CONFIGURED'].includes(err.code);
     const message = { P2002: 'Duplicate record', P2025: 'Record not found', P2003: 'Invalid reference' }[err.code]
-      || (status < 500 ? err.message : 'Internal server error');
+      || (status < 500 || paymentConfigError ? err.message : 'Internal server error');
     if (status >= 500) console.error(err);
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: message, ...(paymentConfigError ? { code: err.code } : {}) });
   });
   return app;
 }
