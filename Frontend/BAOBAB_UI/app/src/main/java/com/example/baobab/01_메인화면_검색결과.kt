@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.Composable
@@ -89,7 +91,8 @@ fun SearchResultsScreen(
     surveys: List<SurveyItem> = emptyList(),
     loading: Boolean = false,
     error: String? = null,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
     var selectedCategory by remember(category) { mutableStateOf(category) }
@@ -107,13 +110,12 @@ fun SearchResultsScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            SearchField(
-                value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
-                    onSearchTermChange(it)
+            Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = SearchGreen) }
+                Box(Modifier.weight(1f)) {
+                    SearchField(searchQuery, { searchQuery = it; onSearchTermChange(it) })
                 }
-            )
+            }
             SearchCategoryBar(
                 selectedCategory = selectedCategory,
                 onCategorySelected = {
@@ -171,7 +173,7 @@ private fun SearchField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
-                .width(370.dp)
+                .fillMaxWidth()
                 .height(40.dp),
             singleLine = true,
             textStyle = TextStyle(
@@ -305,7 +307,7 @@ private fun SvgAsset(
                 settings.javaScriptEnabled = false
                 loadDataWithBaseURL(
                     "file:///android_asset/",
-                    """<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body style=\"margin:0;background:transparent;width:100vw;height:100vh;overflow:hidden\"><img src=\"$assetName\" style=\"display:block;width:100%;height:100%;object-fit:contain\"></body></html>""",
+                    """<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:transparent;width:100vw;height:100vh;overflow:hidden"><img src="$assetName" style="display:block;width:100%;height:100%;object-fit:contain"></body></html>""",
                     "text/html",
                     "UTF-8",
                     null

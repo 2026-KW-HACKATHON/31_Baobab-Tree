@@ -6,7 +6,7 @@ const { JWT_SECRET } = require('../config/auth');
 
 const userSelect = {
   id: true, email: true, loginId: true, name: true,
-  ageGroup: true, region: true, point: true, createdAt: true,
+  ageGroup: true, region: true, memberType: true, memberDetail: true, point: true, createdAt: true,
 };
 const surveyInclude = {
   author: { select: { id: true, name: true } },
@@ -90,6 +90,11 @@ class SurveyService {
 
   async signup(data) {
     const email = text(data.email, 'email');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Invalid email');
+    if (!['KW_STUDENT', 'LOCAL_GOVERNMENT', 'WOLGYE_RESIDENT', 'OTHER'].includes(data.memberType)) fail(400, 'Choose a member type');
+    const memberType = data.memberType;
+    const memberDetail = memberType === 'OTHER' ? text(data.memberDetail, 'memberDetail') : null;
+    if (memberDetail && memberDetail.length > 200) fail(400, 'Member detail is too long');
     const loginId = text(data.loginId, 'loginId');
     const name = text(data.name, 'name');
     text(data.password, 'password');
@@ -97,7 +102,7 @@ class SurveyService {
     if (data.ageGroup !== undefined && data.ageGroup !== null) text(data.ageGroup, 'ageGroup');
     if (data.region !== undefined && data.region !== null) text(data.region, 'region');
     const user = await this.prisma.user.create({
-      data: { email, loginId, name, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
+      data: { email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
       select: userSelect,
     });
     return { message: 'Signed up', user };
@@ -122,13 +127,22 @@ class SurveyService {
     return user;
   }
 
+  async verifyPassword(userId, password) {
+    text(password, 'password');
+    const user = await this.prisma.user.findUnique({ where: { id: id(userId) } });
+    if (!user) fail(404, 'User not found');
+    if (!(await bcrypt.compare(password, user.password))) fail(403, 'Password does not match');
+    return { verified: true };
+  }
+
   async updateUserMe(userId, data) {
     await this.getUserMe(userId);
-    const fields = ['name', 'email', 'ageGroup', 'region'];
+    const fields = ['name', 'email', 'ageGroup', 'region', 'currentPassword'];
     if (!data || typeof data !== 'object' || Array.isArray(data) ||
         !Object.keys(data).length || Object.keys(data).some(key => !fields.includes(key))) {
       fail(400, 'Only name, email, ageGroup and region can be updated');
     }
+    await this.verifyPassword(userId, data.currentPassword);
     const changes = {};
     if (data.name !== undefined) changes.name = text(data.name, 'name');
     if (data.email !== undefined) {
@@ -212,7 +226,22 @@ class SurveyService {
         (fields.targetCount !== undefined && fields.targetCount !== survey.targetCount)) {
       fail(400, '등록 후 리워드와 지급 인원은 변경할 수 없습니다.');
     }
-    return this.prisma.survey.update({ where: { id: id(surveyId) }, data: fields, include: surveyInclude });
+    let questions;
+    if (data.questions !== undefined) {
+      if (!Array.isArray(data.questions) || !data.questions.length) fail(400, 'questions must be a nonempty array');
+      questions = data.questions.map(questionData);
+    }
+    return transaction(this.prisma, async tx => {
+      const current = await tx.survey.findUnique({ where: { id: survey.id } });
+      if (!current) fail(404, 'Survey not found');
+      if (current.userId !== id(userId)) fail(403, 'Only the author can perform this action');
+      if (questions) {
+        if (await tx.response.count({ where: { surveyId: survey.id } })) fail(409, 'Questions cannot change after responses exist');
+        await tx.question.deleteMany({ where: { surveyId: survey.id } });
+      }
+      return tx.survey.update({ where: { id: survey.id }, data: { ...fields,
+        ...(questions ? { questions: { create: questions } } : {}) }, include: surveyInclude });
+    });
   }
 
   async deleteSurvey(userId, surveyId) {
@@ -309,10 +338,14 @@ class SurveyService {
   async getSurveyResults(userId, surveyId) {
     await this.ownedSurvey(userId, surveyId);
     const survey = await this.prisma.survey.findUnique({
-      where: { id: id(surveyId) }, include: { questions: { orderBy: { id: 'asc' }, include: { options: true, answers: true } } },
+      where: { id: id(surveyId) }, include: { questions: { orderBy: { id: 'asc' }, include: { options: true, answers: true } },
+        responses: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { answers: true } } },
     });
     const totalResponses = await this.prisma.response.count({ where: { surveyId: survey.id } });
-    return { surveyId: survey.id, totalResponses, questions: survey.questions.map(q => {
+    const responses = survey.responses.map(response => ({ responseId: response.id, createdAt: response.createdAt,
+      answers: survey.questions.map(q => ({ questionId: q.id, question: q.question,
+        answer: response.answers.find(a => a.questionId === q.id)?.answer ?? null })) }));
+    return { surveyId: survey.id, totalResponses, responses, questions: survey.questions.map(q => {
       const counts = new Map(q.options.map(o => [o.optionText, 0]));
       q.answers.forEach(a => counts.set(a.answer, (counts.get(a.answer) || 0) + 1));
       return { questionId: q.id, responseCount: q.answers.length, results: [...counts].map(([option, value]) => ({ option, count: value,

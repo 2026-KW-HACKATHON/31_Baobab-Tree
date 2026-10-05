@@ -58,7 +58,7 @@ test('schema-backed API integration', async t => {
   let author, participant, token, participantToken, survey;
   const password = ' pass with spaces ';
   await t.test('signup, login and credentials use the schema fields', async () => {
-    let result = await request('POST', '/auth/signup', { loginId: 'author', name: 'Author', email: 'author@example.test', password, ageGroup: '20', region: 'Seoul' });
+    let result = await request('POST', '/auth/signup', { memberType: 'KW_STUDENT', loginId: 'author', name: 'Author', email: 'author@example.test', password, ageGroup: '20', region: 'Seoul' });
     assert.equal(result.status, 201);
     author = result.data.user;
     assert.equal(author.point, 0);
@@ -72,16 +72,16 @@ test('schema-backed API integration', async t => {
     assert.equal(result.data.user.password, undefined);
     assert.equal((await request('GET', '/users/me', undefined, token)).data.id, author.id);
     assert.equal((await request('POST', '/auth/login', { email: 'author@example.test', password: 'incorrect' })).status, 401);
-    assert.equal((await request('POST', '/auth/signup', { loginId: 'author', name: 'Duplicate', email: 'other@example.test', password })).status, 409);
+    assert.equal((await request('POST', '/auth/signup', { memberType: 'KW_STUDENT', loginId: 'author', name: 'Duplicate', email: 'other@example.test', password })).status, 409);
     assert.equal((await request('POST', '/auth/signup', {})).status, 400);
-    result = await request('POST', '/auth/signup', { loginId: 'participant', name: 'Participant', email: 'participant@example.test', password });
+    result = await request('POST', '/auth/signup', { memberType: 'KW_STUDENT', loginId: 'participant', name: 'Participant', email: 'participant@example.test', password });
     participant = result.data.user;
     participantToken = (await request('POST', '/auth/login', { email: participant.email, password })).data.accessToken;
   });
   await t.test('account profile updates persist and protect identity and point balance', async () => {
     assert.equal((await request('PATCH', '/users/me', { name: 'Changed' })).status, 401);
     let result = await request('PATCH', '/users/me', {
-      name: 'New Author', email: 'updated@example.test', region: 'Wolgye', ageGroup: '20s'
+      currentPassword: password, name: 'New Author', email: 'updated@example.test', region: 'Wolgye', ageGroup: '20s'
     }, token);
     assert.equal(result.status, 200);
     assert.equal(result.data.name, 'New Author');
@@ -93,13 +93,49 @@ test('schema-backed API integration', async t => {
       { password: 'changed' }, { name: '' }, { email: 'invalid' }, {}]) {
       assert.equal((await request('PATCH', '/users/me', payload, token)).status, 400);
     }
-    assert.equal((await request('PATCH', '/users/me', { email: participant.email }, token)).status, 409);
+    assert.equal((await request('PATCH', '/users/me', { currentPassword: password, email: participant.email }, token)).status, 409);
     assert.equal((await request('GET', '/users/me', undefined, token)).data.point, 0);
     result = await request('PATCH', '/users/me', {
-      name: author.name, email: author.email, region: null, ageGroup: null
+      currentPassword: password, name: author.name, email: author.email, region: null, ageGroup: null
     }, token);
     assert.equal(result.status, 200);
     assert.equal(result.data.region, null);
+  });
+  await t.test('membership selection and password verification are required', async () => {
+    const signup = { loginId: 'membership', name: 'Member', email: 'member@example.test', password };
+    assert.equal((await request('POST', '/auth/signup', signup)).status, 400);
+    assert.equal((await request('POST', '/auth/signup', { ...signup, memberType: 'OTHER' })).status, 400);
+    assert.equal((await request('POST', '/auth/signup', { ...signup, memberType: 'invalid' })).status, 400);
+    const joined = await request('POST', '/auth/signup', { ...signup, memberType: 'OTHER', memberDetail: '동네 상인' });
+    assert.equal(joined.status, 201);
+    assert.equal(joined.data.user.memberDetail, '동네 상인');
+    assert.equal((await request('POST', '/auth/verify-password', { password: 'wrong' }, token)).status, 403);
+    assert.equal((await request('POST', '/auth/verify-password', { password }, token)).data.verified, true);
+    assert.equal((await request('POST', '/auth/verify-password', { password })).status, 401);
+    assert.equal((await request('PATCH', '/users/me', { name: 'Unauthorized change' }, token)).status, 400);
+    assert.equal((await request('PATCH', '/users/me', { name: 'Unauthorized change', currentPassword: 'wrong' }, token)).status, 403);
+    assert.equal((await request('GET', '/users/me', undefined, token)).data.name, author.name);
+  });
+  await t.test('survey edits replace questions atomically and preserve submitted answers', async () => {
+    const created = await request('POST', '/surveys', { title: 'Editable', questions: [{ question: 'Old', questionType: 'short' }] }, token);
+    const url = '/surveys/' + created.data.id;
+    const changed = { title: 'Updated', questions: [{ question: 'New', questionType: 'short' }, { question: 'Optional', questionType: 'short', required: false }] };
+    assert.equal((await request('PATCH', url, changed, participantToken)).status, 403);
+    assert.equal((await request('PATCH', url, { ...changed, questions: [{ question: '', questionType: 'short' }] }, token)).status, 400);
+    assert.equal((await request('GET', url)).data.title, 'Editable');
+    const updated = await request('PATCH', url, changed, token);
+    assert.equal(updated.status, 200);
+    assert.equal(updated.data.questions.length, 2);
+    assert.equal((await request('POST', url + '/responses', { answers: [{ questionId: updated.data.questions[0].id, answer: 'My answer' }] }, participantToken)).status, 201);
+    assert.equal((await request('PATCH', url, changed, token)).status, 409);
+    assert.equal((await request('PATCH', url, { title: 'Metadata edit' }, token)).status, 200);
+    const results = await request('GET', url + '/results', undefined, token);
+    assert.equal(results.data.responses.length, 1);
+    assert.equal(results.data.responses[0].answers[0].answer, 'My answer');
+    assert.equal(results.data.responses[0].answers[1].answer, null);
+    assert.equal(results.data.responses[0].userId, undefined);
+    assert.equal((await request('GET', url + '/results', undefined, participantToken)).status, 403);
+    await request('DELETE', url, undefined, token);
   });
   await t.test('registration charges reward budget atomically and rejects insufficient funds', async () => {
     const payload = { title: 'Budget check', rewardPoint: 100, targetCount: 2,
@@ -370,7 +406,7 @@ test('schema-backed API integration', async t => {
   });
 
   await t.test('PostgreSQL concurrent participation cannot exceed the funded capacity', { skip: !postgres }, async () => {
-    const other = (await request('POST', '/auth/signup', { loginId: 'concurrent', name: 'Concurrent', email: 'concurrent@example.test', password })).data.user;
+    const other = (await request('POST', '/auth/signup', { memberType: 'KW_STUDENT', loginId: 'concurrent', name: 'Concurrent', email: 'concurrent@example.test', password })).data.user;
     const otherToken = (await request('POST', '/auth/login', { loginId: other.loginId, password })).data.accessToken;
     const created = await request('POST', '/surveys', { title: 'One seat', rewardPoint: 100, targetCount: 1, questions: [{ question: 'Why?', questionType: 'short' }] }, token);
     assert.equal(created.status, 201);

@@ -31,6 +31,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,19 +109,22 @@ fun HomeScreen(
                 selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
             )
-            SurveyRequestContent(
-                loading = loading, error = error, data = visibleSurveys, onRetry = onRetry,
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            ) { items ->
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(156.dp),
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(bottom = 124.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(items, key = { it.id }) { survey ->
-                        SurveyFeedCard(survey = survey, onClick = { onSurveyClick(survey) })
+            PullToRefreshBox(isRefreshing = loading, onRefresh = onRetry,
+                modifier = Modifier.weight(1f).fillMaxWidth()) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(156.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(bottom = 124.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (error != null) item(span = { GridItemSpan(maxLineSpan) }) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(error)
+                            TextButton(onRetry) { Text("다시 시도") }
+                        }
+                    }
+                    if (!loading && visibleSurveys.isEmpty() && error == null) item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text("아직 등록된 설문이 없어요. 아래로 당겨 새로고침할 수 있어요.", Modifier.padding(24.dp))
+                    }
+                    items(visibleSurveys, key = { it.id }) { survey ->
+                        SurveyFeedCard(survey, onClick = { onSurveyClick(survey) })
                     }
                 }
             }
@@ -207,81 +214,25 @@ private fun HomeCategoryBar(
 }
 
 @Composable
-fun SurveyFeedCard(
-    survey: SurveyItem,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(18.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(2.dp, shape)
-            .clip(shape)
-            .background(Color.White)
-            .clickable(onClick = onClick)
-            .padding(8.dp)
-    ) {
-        SurveyImage(survey = survey,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(12.dp))
-        )
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = survey.category,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(survey.badgeColor)
-                    .border(2.dp, Color.White, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                color = survey.badgeTextColor,
-                fontFamily = HomeFont,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = survey.title,
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.Black,
-                fontFamily = HomeFont,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 20.sp,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = survey.author,
-                    modifier = Modifier.weight(1f),
-                    color = Color(0xFF545454),
-                    fontFamily = HomeFont,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = survey.points,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFE9DBB8))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = HomeGreen,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 18.sp,
-                    lineHeight = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.End,
-                    maxLines = 1
-                )
+fun SurveyFeedCard(survey: SurveyItem, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.fillMaxWidth().shadow(2.dp, shape).clip(shape).background(Color.White)
+        .clickable(onClick = onClick).padding(7.dp)) {
+        SurveyImage(survey, Modifier.fillMaxWidth().aspectRatio(2.2f).clip(RoundedCornerShape(10.dp)), ContentScale.Crop)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(survey.category, Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(survey.badgeColor)
+                    .padding(horizontal = 6.dp, vertical = 4.dp), color = survey.badgeTextColor,
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(survey.points, Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9DBB8))
+                    .padding(horizontal = 6.dp, vertical = 4.dp), color = HomeGreen, fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 1)
             }
+            Text(survey.title, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold,
+                minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(survey.author, color = HomeMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

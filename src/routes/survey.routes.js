@@ -197,6 +197,9 @@ function createSurveyRouter(service = new SurveyService()) {
     handle(200, req => service.login(req.body || {})),
   );
 
+  router.post('/auth/verify-password', auth,
+    handle(200, req => service.verifyPassword(req.user.userId, req.body?.password)));
+
   router.post(
     '/auth/logout',
     auth,

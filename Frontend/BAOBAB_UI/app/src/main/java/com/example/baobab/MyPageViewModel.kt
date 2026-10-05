@@ -10,10 +10,13 @@ import java.util.concurrent.Executors
 import java.util.UUID
 
 data class UserProfile(val id: Int, val name: String, val email: String, val loginId: String, val point: Int,
-    val ageGroup: String? = null, val region: String? = null)
+    val ageGroup: String? = null, val region: String? = null, val memberType: String? = null, val memberDetail: String? = null)
 data class AnswerResult(val option: String, val count: Int, val percentage: Int)
 data class QuestionResults(val questionId: Int, val results: List<AnswerResult>, val responseCount: Int? = null)
-data class SurveyResults(val surveyId: Int, val totalResponses: Int, val questions: List<QuestionResults>)
+data class SurveyResults(val surveyId: Int, val totalResponses: Int, val questions: List<QuestionResults>,
+    val responses: List<SurveyResponseResult>? = null)
+data class SurveyResponseResult(val responseId: Int, val createdAt: String, val answers: List<ResponseAnswerResult>)
+data class ResponseAnswerResult(val questionId: Int, val question: String, val answer: String?)
 data class AnswerHistory(val question: String, val answer: String)
 data class ParticipationHistory(val id: Int, val surveyId: String, val title: String, val category: String,
     val rewardPoint: Int, val createdAt: String, val answers: List<AnswerHistory>)
@@ -138,13 +141,31 @@ class MyPageViewModel(
         selectedSurvey = null; results = null; resultsError = null; resultsLoading = false
     }
 
-    fun saveProfile(token: String, name: String, email: String, region: String, ageGroup: String,
+    fun verifyPassword(token: String, password: String, success: () -> Unit) {
+        if (savingProfile || closed) return
+        val request = generation
+        savingProfile = true; profileError = null
+        worker.submit {
+            val response = runCatching { repository.verifyPassword(token, password) }
+            ui.execute {
+                if (!closed && request == generation) {
+                    savingProfile = false
+                    response.fold({ success() }, {
+                        sessionExpired = it is SurveyApiException && it.status == 401
+                        profileError = it.message ?: "비밀번호를 확인하지 못했습니다."
+                    })
+                }
+            }
+        }
+    }
+
+    fun saveProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String,
         success: () -> Unit) {
         if (savingProfile || closed) return
         val request = generation
         savingProfile = true; profileError = null
         worker.submit {
-            val response = runCatching { repository.updateProfile(token, name, email, region, ageGroup) }
+            val response = runCatching { repository.updateProfile(token, name, email, region, ageGroup, currentPassword) }
             ui.execute {
                 if (!closed && request == generation) {
                     savingProfile = false

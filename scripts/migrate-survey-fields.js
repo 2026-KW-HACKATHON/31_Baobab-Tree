@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const prisma = new PrismaClient();
 const additions = {
+  USER: { member_type: 'TEXT', member_detail: 'TEXT' },
   SURVEY: { description: 'TEXT', audience: 'TEXT', duration: 'TEXT', imageData: 'TEXT' },
   QUESTION: { required: 'BOOLEAN NOT NULL DEFAULT true' },
 };

@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
                                 surveys = surveyData.listState.data.orEmpty(),
                                 loading = surveyData.listState.loading,
                                 error = surveyData.listState.error,
-                                onRetry = { surveyData.loadSurveys(force = true) },
+                                onRetry = { surveyData.loadSurveys(force = true); myPage.load(account.token) },
                                 searchTerm = viewModel.homeSearchTerm,
                                 onSearchTermChange = { viewModel.homeSearchTerm = it },
                                 onSurveyClick = { survey ->
@@ -192,7 +192,8 @@ class MainActivity : ComponentActivity() {
                                 onMyClick = {
                                     viewModel.navigate(BaobabScreen.MY)
                                 },
-                                onSearchTermChange = { viewModel.searchTerm = it }
+                                onSearchTermChange = { viewModel.searchTerm = it },
+                                onBack = { viewModel.goBack() }
                             )
                         }
                     }
@@ -220,6 +221,7 @@ class MainActivity : ComponentActivity() {
                                         canDelete = account.token != null && myPage.profile?.id != null &&
                                             survey.userId == myPage.profile?.id,
                                         onDelete = { account.clearError(); pendingDeletion = survey },
+                                        onEdit = { account.clearError(); viewModel.beginEditing(survey) },
                                         relatedSurveys = surveyData.listState.data.orEmpty(),
                                         onRelatedSurveyClick = { viewModel.openSurvey(it) },
                                         onParticipateClick = {
@@ -411,6 +413,20 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    BaobabScreen.EDIT -> {
+                        val survey = requireNotNull(viewModel.editingSurvey)
+                        SurveyEditScreen(survey, viewModel.editState, account.busy, account.error,
+                            onBack = { viewModel.goBack() },
+                            onSave = { draft, status ->
+                                account.editSurvey(survey, draft, status) {
+                                    viewModel.goBack()
+                                    surveyData.loadSurveys(force = true)
+                                    surveyData.loadDetail(survey.id)
+                                    myPage.load(account.token)
+                                }
+                            })
+                    }
+
                     // MY
                     BaobabScreen.MY -> {
                         LocalNetworkPermissionGate {
@@ -420,6 +436,7 @@ class MainActivity : ComponentActivity() {
                                 onLogout = { account.logout(); myPage.load(null); viewModel.goHome() },
                                 onCreate = { viewModel.beginCreation() },
                                 onProfileUpdated = { surveyData.loadSurveys(force = true) },
+                                onEdit = { account.clearError(); viewModel.beginEditing(it) },
                                 onOpenSurvey = { viewModel.openSurvey(SurveyItem(id = it)) },
                                 onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
                                 onDelete = { account.clearError(); pendingDeletion = it })

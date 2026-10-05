@@ -27,16 +27,36 @@ private val MyMuted = Color(0xFF697369)
 fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
     onLogin: () -> Unit, onLogout: () -> Unit, onCreate: () -> Unit,
     onDelete: (SurveyItem) -> Unit = {}, onProfileUpdated: () -> Unit = {},
-    onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}) {
+    onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}, onEdit: (SurveyItem) -> Unit = {}) {
     val context = LocalContext.current
-    var editingProfile by remember { mutableStateOf(false) }
+    var editingProfile by remember(token) { mutableStateOf(false) }
+    var confirmingPassword by remember(token) { mutableStateOf(false) }
+    var profilePassword by remember(token) { mutableStateOf("") }
+    var showParticipations by rememberSaveable { mutableStateOf(false) }
+    if (confirmingPassword && token != null) AlertDialog(
+        onDismissRequest = { if (!model.savingProfile) { confirmingPassword = false; profilePassword = ""; model.clearProfileError() } },
+        title = { Text("비밀번호 확인") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("계정 정보를 수정하려면 현재 비밀번호를 입력해주세요.")
+                OutlinedTextField(profilePassword, { profilePassword = it; model.clearProfileError() },
+                    singleLine = true, enabled = !model.savingProfile,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), label = { Text("현재 비밀번호") })
+                model.profileError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { TextButton(onClick = {
+            model.verifyPassword(token, profilePassword) { confirmingPassword = false; editingProfile = true }
+        }, enabled = !model.savingProfile && profilePassword.isNotBlank()) { Text(if (model.savingProfile) "확인 중…" else "확인") } },
+        dismissButton = { TextButton({ confirmingPassword = false; profilePassword = ""; model.clearProfileError() },
+            enabled = !model.savingProfile) { Text("취소") } })
     var expandedHistory by rememberSaveable { mutableStateOf<Int?>(null) }
     if (editingProfile && token != null) model.profile?.let { user ->
         ProfileEditDialog(user, model.savingProfile, model.profileError,
-            onDismiss = { editingProfile = false; model.clearProfileError() },
+            onDismiss = { editingProfile = false; profilePassword = ""; model.clearProfileError() },
             onSave = { name, email, region, ageGroup ->
-                model.saveProfile(token, name, email, region, ageGroup) {
-                    editingProfile = false; onProfileUpdated()
+                model.saveProfile(token, name, email, region, ageGroup, profilePassword) {
+                    editingProfile = false; profilePassword = ""; onProfileUpdated()
                 }
             })
     }
@@ -64,7 +84,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
             }
             selected != null -> SurveyRequestContent(model.resultsLoading, model.resultsError, model.results,
                 { model.openResults(selected, token) }, Modifier.weight(1f).fillMaxWidth()) { results ->
-                ResultsContent(selected, results, onDelete, { shareSurvey(context, it) })
+                ResultsContent(selected, results, onDelete, { shareSurvey(context, it) }, onEdit)
             }
             else -> SurveyRequestContent(model.loading, model.error, model.profile,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
@@ -92,7 +112,10 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Text("계정 정보", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                TextButton(onClick = { model.clearProfileError(); editingProfile = true }) { Text("수정") }
+                                TextButton(onClick = { model.clearProfileError(); profilePassword = ""; confirmingPassword = true }) { Text("수정") }
+                            }
+                            user.memberType?.let { type ->
+                                Text(if (type == "OTHER") "기타 · ${user.memberDetail.orEmpty()}" else MemberTypes[type].orEmpty(), color = MyGreen)
                             }
                             Text(user.email, color = MyMuted, fontSize = 14.sp)
                             if (!user.region.isNullOrBlank()) Text(user.region, color = MyMuted, fontSize = 14.sp)
@@ -127,6 +150,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                                     Text("답변 통계 보기 →", color = MyGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { onEdit(survey) }) { Text("수정") }
                                     TextButton(onClick = { shareSurvey(context, survey) }) { Text("공유") }
                                     TextButton(onClick = { onDelete(survey) }) {
                                         Text("삭제", color = MaterialTheme.colorScheme.error)
@@ -135,32 +159,38 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             }
                         }
                     }
-                    item { Text("참여 이력", fontSize = 19.sp, fontWeight = FontWeight.Bold) }
-                    if (model.participations.isEmpty()) item {
+                    item {
+                        OutlinedButton(onClick = { showParticipations = !showParticipations }, modifier = Modifier.fillMaxWidth()) {
+                            Text("내가 참여한 설문 (${model.participationCount}) ${if (showParticipations) "▴" else "▾"}")
+                        }
+                    }
+                    if (showParticipations && model.participations.isEmpty()) item {
                         MyPanel { Text("아직 참여한 설문이 없어요.", color = MyMuted) }
                     }
-                    items(model.participations, key = { "history-${it.id}" }) { history ->
-                        MyPanel {
-                            Text(history.category, color = MyGreen, fontSize = 12.sp)
-                            Text(history.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                            Text("${history.createdAt.take(10)} 참여 · ${history.rewardPoint}P", color = MyMuted, fontSize = 13.sp)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                TextButton(onClick = { expandedHistory = if (expandedHistory == history.id) null else history.id }) {
-                                    Text(if (expandedHistory == history.id) "내 답변 접기" else "내 답변 보기")
+                    if (showParticipations) items(model.participations, key = { "history-${it.id}" }) { history ->
+                        Surface(onClick = { onOpenSurvey(history.surveyId) }, shape = RoundedCornerShape(20.dp), color = Color.White) {
+                            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(history.category, color = MyGreen, fontSize = 12.sp)
+                                Text(history.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Text("${history.createdAt.take(10)} 참여 · ${history.rewardPoint}P", color = MyMuted, fontSize = 13.sp)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    TextButton(onClick = { expandedHistory = if (expandedHistory == history.id) null else history.id }) {
+                                        Text(if (expandedHistory == history.id) "내 답변 접기" else "내 답변 보기")
+                                    }
+                                    Text("설문 열기 →", color = MyGreen, modifier = Modifier.align(Alignment.CenterVertically))
                                 }
-                                TextButton(onClick = { onOpenSurvey(history.surveyId) }) { Text("설문 보기") }
-                            }
-                            if (expandedHistory == history.id) {
-                                if (history.answers.isEmpty()) Text("선택 문항에 답변하지 않았어요.", color = MyMuted)
-                                history.answers.forEach { answer ->
-                                    Text(answer.question, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    Text(answer.answer, color = MyMuted, fontSize = 14.sp)
+                                if (expandedHistory == history.id) {
+                                    if (history.answers.isEmpty()) Text("선택 문항에 답변하지 않았어요.", color = MyMuted)
+                                    history.answers.forEach { answer ->
+                                        Text(answer.question, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(answer.answer, color = MyMuted, fontSize = 14.sp)
+                                    }
                                 }
                             }
                         }
                     }
                     item { TextButton(onLogout, enabled = !model.savingProfile,
-                        modifier = Modifier.fillMaxWidth()) { Text("로그아웃", color = MyMuted) } }
+                        modifier = Modifier.fillMaxWidth()) { Text("로그아웃", color = MaterialTheme.colorScheme.error) } }
                 }
             }
         }
@@ -185,40 +215,63 @@ private fun MyMetric(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun ResultsContent(survey: SurveyItem, results: SurveyResults, onDelete: (SurveyItem) -> Unit,
-    onShare: (SurveyItem) -> Unit) {
+internal fun ResultsContent(survey: SurveyItem, results: SurveyResults, onDelete: (SurveyItem) -> Unit,
+    onShare: (SurveyItem) -> Unit, onEdit: (SurveyItem) -> Unit) {
+    var byResponse by rememberSaveable(survey.id) { mutableStateOf(false) }
+    var expandedQuestions by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }
+    var expandedResponses by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Text(survey.title, fontSize = 23.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
             MyMetric("전체 응답", "${results.totalResponses}명", Modifier.fillMaxWidth())
-            TextButton(onClick = { onShare(survey) }, modifier = Modifier.fillMaxWidth()) { Text("설문 공유") }
-            TextButton(onClick = { onDelete(survey) }, modifier = Modifier.fillMaxWidth()) {
-                Text("설문 삭제", color = MaterialTheme.colorScheme.error)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                TextButton({ onShare(survey) }) { Text("공유") }
+                TextButton({ onEdit(survey) }) { Text("설문 수정") }
+                TextButton({ onDelete(survey) }) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(!byResponse, { byResponse = false }, label = { Text("문항별 답변") })
+                FilterChip(byResponse, { byResponse = true }, label = { Text("응답별 전체 답변") })
             }
         }
-        if (results.totalResponses == 0) item {
-            Text("아직 응답이 없어요. 응답이 모이면 여기에 통계가 표시돼요.", color = MyMuted)
-        }
-        items(survey.questions, key = { it.id }) { question ->
+        if (results.totalResponses == 0) item { Text("아직 응답이 없어요.", color = MyMuted) }
+        if (byResponse) {
+            if (results.responses == null) item { Text("응답별 보기를 사용하려면 서버를 업데이트해주세요.", color = MyMuted) }
+            items(results.responses.orEmpty(), key = { it.responseId }) { response ->
+                val expanded = response.responseId in expandedResponses
+                MyPanel {
+                    Text("응답 ${results.responses.orEmpty().indexOf(response) + 1}", fontWeight = FontWeight.Bold)
+                    Text(response.createdAt.take(10), color = MyMuted, fontSize = 12.sp)
+                    TextButton({ expandedResponses = if (expanded) expandedResponses - response.responseId else expandedResponses + response.responseId }) {
+                        Text(if (expanded) "답변 접기 ▴" else "전체 답변 펼치기 ▾")
+                    }
+                    if (expanded) response.answers.forEachIndexed { index, answer ->
+                        Text("${index + 1}. ${answer.question}", fontWeight = FontWeight.Bold)
+                        Text(answer.answer ?: "미응답 (선택 문항)", color = MyMuted)
+                        HorizontalDivider()
+                    }
+                }
+            }
+        } else items(survey.questions, key = { it.id }) { question ->
             val questionResults = results.questions.find { it.questionId == question.id }
-            val answers = questionResults?.results.orEmpty()
+            val expanded = question.id in expandedQuestions
             MyPanel {
                 Text("${survey.questions.indexOf(question) + 1}. ${question.question}",
                     fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp)
-                Text(if (question.questionType == "single") "객관식 · 선택지별 응답 비율" else "주관식 · 응답 내용",
+                Text("${if (question.questionType == "single") "객관식" else "주관식"} · ${questionResults?.responseCount ?: 0}명 응답 · ${if (question.required) "필수" else "선택"}",
                     color = MyMuted, fontSize = 12.sp)
-                Text("${questionResults?.responseCount ?: results.totalResponses}명 응답 · ${if (question.required) "필수" else "선택"}",
-                    color = MyMuted, fontSize = 12.sp)
-                if (answers.isEmpty()) Text("아직 답변이 없습니다.", color = MyMuted, fontSize = 14.sp)
-                answers.forEach { answer ->
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton({ expandedQuestions = if (expanded) expandedQuestions - question.id else expandedQuestions + question.id }) {
+                    Text(if (expanded) "답변 접기 ▴" else "전체 답변 펼치기 ▾")
+                }
+                if (expanded) {
+                    if (questionResults?.results.isNullOrEmpty()) Text("아직 답변이 없습니다.", color = MyMuted)
+                    questionResults?.results.orEmpty().forEach { answer ->
                         Text(answer.option, fontSize = 15.sp, lineHeight = 22.sp)
-                        Text("${answer.count}명 · ${answer.percentage}%", color = MyGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("${answer.count}명 · ${answer.percentage}%", color = MyGreen, fontSize = 13.sp)
                         if (question.questionType == "single") LinearProgressIndicator(
                             progress = { (answer.percentage / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth().height(8.dp), color = MyGreen,
-                            trackColor = Color(0xFFEAF0E5))
+                            modifier = Modifier.fillMaxWidth().height(8.dp), color = MyGreen, trackColor = Color(0xFFEAF0E5))
                     }
                 }
             }

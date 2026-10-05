@@ -37,14 +37,15 @@ class SurveyDataViewModel(
         listInitialized = true
         val version = ++listVersion
         listTask?.cancel(true)
-        listState = SurveyLoadState(loading = true)
+        val previous = listState.data
+        listState = SurveyLoadState(data = previous, loading = true)
         listTask = worker.submit {
             val result = runCatching { repository.getSurveys() }
             uiExecutor.execute {
                 if (!closed.get() && version == listVersion) {
                     listState = result.fold(
                         onSuccess = { SurveyLoadState(data = it) },
-                        onFailure = { SurveyLoadState(error = message(it)) }
+                        onFailure = { SurveyLoadState(data = previous, error = message(it)) }
                     )
                 }
             }
@@ -52,6 +53,7 @@ class SurveyDataViewModel(
     }
 
     fun loadDetail(id: String) {
+        val previous = detailState.data?.takeIf { detailId == id }
         if (closed.get()) return
         detailId = id
         val version = ++detailVersion
@@ -63,7 +65,7 @@ class SurveyDataViewModel(
                 if (!closed.get() && version == detailVersion) {
                     detailState = result.fold(
                         onSuccess = { SurveyLoadState(data = it) },
-                        onFailure = { SurveyLoadState(error = message(it)) }
+                        onFailure = { SurveyLoadState(data = previous, error = message(it)) }
                     )
                 }
             }

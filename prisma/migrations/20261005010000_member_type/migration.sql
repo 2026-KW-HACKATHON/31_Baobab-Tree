@@ -1,0 +1,2 @@
+ALTER TABLE "USER" ADD COLUMN "member_type" TEXT;
+ALTER TABLE "USER" ADD COLUMN "member_detail" TEXT;

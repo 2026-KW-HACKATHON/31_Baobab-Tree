@@ -17,12 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SurveyFormHeader(onBackClick: () -> Unit) {
+fun SurveyFormHeader(onBackClick: () -> Unit, title: String = "설문 작성하기") {
     Box(Modifier.fillMaxWidth().height(60.dp)) {
         IconButton(onClick = onBackClick, modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp)) {
             Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = Color(0xFF2F5539), modifier = Modifier.size(30.dp))
         }
-        Text("설문 작성하기", modifier = Modifier.align(Alignment.Center),
+        Text(title, modifier = Modifier.align(Alignment.Center),
             fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color(0xFF26372B))
     }
 }

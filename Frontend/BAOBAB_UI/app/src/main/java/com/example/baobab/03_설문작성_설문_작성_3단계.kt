@@ -151,12 +151,12 @@ fun SurveyCreationStepThreeScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(120.dp)
+                .height(87.dp).background(StepThreeBackground)
         ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 20.dp, start = 18.dp, end = 18.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp, start = 18.dp, end = 18.dp)
                     .fillMaxWidth()
                     .height(55.dp)
                     .clip(RoundedCornerShape(16.dp))

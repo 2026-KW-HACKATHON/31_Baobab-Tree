@@ -8,7 +8,7 @@ import androidx.lifecycle.ViewModel
 
 enum class BaobabScreen {
     LOGIN, START, HOME, SEARCH, DETAIL, PARTICIPATE, SURVEY_COMPLETE,
-    CREATE_ONE, CREATE_TWO, CREATE_THREE, CREATE_COMPLETE, MY, POINTS
+    CREATE_ONE, CREATE_TWO, CREATE_THREE, CREATE_COMPLETE, MY, POINTS, EDIT
 }
 
 class SurveyCreationState {
@@ -48,6 +48,14 @@ class BaobabViewModel : ViewModel() {
     private val backStack = mutableStateListOf(BaobabScreen.LOGIN)
     val currentScreen: BaobabScreen get() = backStack.last()
     val canGoBack: Boolean get() = backStack.size > 1
+
+    var editingSurvey by mutableStateOf<SurveyItem?>(null); private set
+    var editState by mutableStateOf(SurveyCreationState()); private set
+    fun beginEditing(survey: SurveyItem) {
+        editingSurvey = survey
+        editState = surveyEditState(survey)
+        navigate(BaobabScreen.EDIT)
+    }
 
     var creationState by mutableStateOf(SurveyCreationState())
         private set

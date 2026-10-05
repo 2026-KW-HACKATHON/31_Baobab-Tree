@@ -17,6 +17,8 @@ model User {
   loginId        String         @unique @map("login_id")
   name           String
   ageGroup       String?        @map("age_group")
+  memberType     String?        @map("member_type")
+  memberDetail   String?        @map("member_detail")
   region         String?
   point          Int            @default(0)
   createdAt      DateTime       @default(now()) @map("created_at")

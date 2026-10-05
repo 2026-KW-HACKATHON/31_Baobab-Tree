@@ -74,7 +74,7 @@ internal fun isSurveyBasicsComplete(draft: SurveyDraftStepOne, today: LocalDate 
 fun SurveyCreationStepOneScreen(
     onBackClick: () -> Unit = {},
     onNextClick: (SurveyDraftStepOne) -> Unit = {},
-    state: SurveyCreationState = remember { SurveyCreationState() }
+    state: SurveyCreationState = remember { SurveyCreationState() }, editing: Boolean = false
 ) {
     var title by state::title
     var category by state::category
@@ -92,7 +92,7 @@ fun SurveyCreationStepOneScreen(
             .safeDrawingPadding().imePadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            SurveyFormHeader(onBackClick = onBackClick)
+            SurveyFormHeader(onBackClick, if (editing) "설문 수정하기" else "설문 작성하기")
             SurveyFormProgress(currentStep = 1)
             Column(
                 modifier = Modifier
@@ -140,13 +140,7 @@ fun SurveyCreationStepOneScreen(
                     multiline = true
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                SurveyFieldSection(
-                    number = 4,
-                    label = "설문 대상 (필수)",
-                    value = audience,
-                    placeholder = "예) 월계 1동 주민, 광운대학생 등",
-                    onValueChange = { audience = it }
-                )
+                AudienceField(audience, { audience = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                 Spacer(modifier = Modifier.height(24.dp))
                 SurveyDeadlineSection(
                     value = deadline,

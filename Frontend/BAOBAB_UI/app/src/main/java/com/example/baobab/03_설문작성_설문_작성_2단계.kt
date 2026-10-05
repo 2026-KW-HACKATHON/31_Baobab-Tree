@@ -31,7 +31,7 @@ enum class SurveyQuestionType { MULTIPLE_CHOICE, SHORT_ANSWER }
 @Composable
 fun SurveyCreationStepTwoScreen(onBackClick: () -> Unit = {},
     onNextClick: (List<SurveyQuestionDraft>) -> Unit = {},
-    state: SurveyCreationState = remember { SurveyCreationState() }) {
+    state: SurveyCreationState = remember { SurveyCreationState() }, editing: Boolean = false) {
     val questions = state.questions
     val valid = questions.isNotEmpty() && questions.all { question ->
         question.title.isNotBlank() && (question.type == SurveyQuestionType.SHORT_ANSWER ||
@@ -39,7 +39,7 @@ fun SurveyCreationStepTwoScreen(onBackClick: () -> Unit = {},
                 question.options.map { it.trim() }.distinct().size == question.options.size))
     }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding().imePadding()) {
-        SurveyFormHeader(onBackClick)
+        SurveyFormHeader(onBackClick, if (editing) "설문 수정하기" else "설문 작성하기")
         SurveyFormProgress(currentStep = 2)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {

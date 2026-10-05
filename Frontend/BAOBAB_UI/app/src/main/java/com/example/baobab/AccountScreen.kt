@@ -19,7 +19,14 @@ fun AccountScreen(signup: Boolean, account: AccountViewModel, onSuccess: () -> U
     var id by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
+    var emailLocal by rememberSaveable { mutableStateOf("") }
+    var emailDomain by rememberSaveable { mutableStateOf("") }
+    var memberType by rememberSaveable { mutableStateOf("") }
+    var memberDetail by rememberSaveable { mutableStateOf("") }
+    val email = "$emailLocal@$emailDomain"
+    val signupReady = name.isNotBlank() && emailLocal.isNotBlank() &&
+        Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email) &&
+        memberType.isNotBlank() && (memberType != "OTHER" || memberDetail.isNotBlank())
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding().imePadding()
         .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
@@ -28,7 +35,13 @@ fun AccountScreen(signup: Boolean, account: AccountViewModel, onSuccess: () -> U
         Text(if (signup) "회원가입" else "로그인", style = MaterialTheme.typography.titleLarge)
         if (signup) {
             OutlinedTextField(name, { name = it }, label = { Text("이름") }, singleLine = true, enabled = !account.busy, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(email, { email = it }, label = { Text("이메일") }, singleLine = true, enabled = !account.busy, modifier = Modifier.fillMaxWidth())
+            EmailField(emailLocal, { emailLocal = it }, emailDomain, { emailDomain = it }, !account.busy)
+            Text("가입 유형 (필수)")
+            ChoiceField("가입 유형을 선택해주세요", MemberTypes[memberType].orEmpty(), MemberTypes.values.toList(),
+                { label -> memberType = MemberTypes.entries.first { it.value == label }.key }, enabled = !account.busy)
+            if (memberType == "OTHER") OutlinedTextField(memberDetail, { memberDetail = it },
+                label = { Text("기타 소속 직접 입력 (필수)") }, enabled = !account.busy,
+                singleLine = true, modifier = Modifier.fillMaxWidth())
         }
         OutlinedTextField(id, { id = it }, label = { Text("아이디") }, singleLine = true, enabled = !account.busy, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(password, { password = it }, label = { Text("비밀번호") }, singleLine = true,
@@ -40,9 +53,9 @@ fun AccountScreen(signup: Boolean, account: AccountViewModel, onSuccess: () -> U
             }
         }
         Button(onClick = {
-            if (signup) account.signup(name, email, id, password, onSuccess)
+            if (signup) account.signup(name, email, id, password, memberType, memberDetail, onSuccess)
             else account.login(id, password, onSuccess)
-        }, enabled = !account.busy && id.isNotBlank() && password.isNotBlank() && (!signup || (name.isNotBlank() && email.isNotBlank())), modifier = Modifier.fillMaxWidth()) {
+        }, enabled = !account.busy && id.isNotBlank() && password.isNotBlank() && (!signup || signupReady), modifier = Modifier.fillMaxWidth()) {
             Text(if (account.busy) "처리 중…" else if (signup) "가입하기" else "로그인")
         }
         TextButton(onSwitch, enabled = !account.busy) { Text(if (signup) "로그인으로 돌아가기" else "회원가입") }

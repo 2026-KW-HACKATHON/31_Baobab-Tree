@@ -61,11 +61,11 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             .also { require(it.id > 0 && it.name.isNotBlank() && it.point >= 0) }
     }
 
-    fun updateProfile(token: String, name: String, email: String, region: String, ageGroup: String): UserProfile = parse {
+    fun updateProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String): UserProfile = parse {
         if (name.isBlank()) throw SurveyApiException("이름을 입력해주세요.")
         if (!Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim()))
             throw SurveyApiException("이메일 형식을 확인해주세요.")
-        val payload = mapOf("name" to name.trim(), "email" to email.trim(),
+        val payload = mapOf("currentPassword" to currentPassword, "name" to name.trim(), "email" to email.trim(),
             "region" to region.trim().ifEmpty { null }, "ageGroup" to ageGroup.trim().ifEmpty { null })
         gson.fromJson(request("users/me", payload, token, method = "PATCH"), UserProfile::class.java)
             .also { require(it.id > 0 && it.name.isNotBlank()) }
@@ -95,8 +95,20 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         response.get("accessToken").asString.also { require(it.isNotBlank()) }
     }
 
-    fun signup(name: String, email: String, loginId: String, password: String) {
-        request("auth/signup", mapOf("name" to name.trim(), "email" to email.trim(), "loginId" to loginId.trim(), "password" to password))
+    fun signup(name: String, email: String, loginId: String, password: String, memberType: String, memberDetail: String) {
+        request("auth/signup", mapOf("name" to name.trim(), "email" to email.trim(), "loginId" to loginId.trim(),
+            "password" to password, "memberType" to memberType, "memberDetail" to memberDetail.trim().ifEmpty { null }))
+    }
+
+    fun verifyPassword(token: String, password: String) {
+        request("auth/verify-password", mapOf("password" to password), token)
+    }
+
+    fun updateSurvey(survey: SurveyItem, draft: CompletedSurveyDraft, status: String, token: String): SurveyItem = parse {
+        val payload = surveyPayload(draft).toMutableMap()
+        payload["status"] = status
+        if ((survey.participantCount ?: 0) > 0) payload.remove("questions")
+        gson.fromJson(request("surveys/${survey.id}", payload, token, method = "PATCH"), SurveyDto::class.java).toItem()
     }
 
     fun hasParticipated(surveyId: String, token: String): Boolean = parse {
@@ -279,6 +291,7 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                                 "포인트가 부족하거나 교환 요청이 충돌했습니다. 잔액을 새로고침해주세요."
                             path.endsWith("/responses") -> "이미 참여한 설문입니다."
                             path == "users/me" -> "이미 사용 중인 이메일입니다."
+                            method == "PATCH" && path.startsWith("surveys/") -> "응답이 있는 설문의 문항은 변경할 수 없습니다. 설문을 다시 열어주세요."
                             else -> "이미 사용 중인 아이디 또는 이메일입니다."
                         }
                         400 -> if (path.endsWith("/responses")) "설문이 마감되었거나 모집 인원이 찼을 수 있습니다. 설문 정보와 답변을 확인해주세요." else "입력 내용을 확인해주세요."
@@ -287,7 +300,7 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                         } else {
                             "설문을 찾을 수 없습니다."
                         }
-                        403 -> "내가 만든 설문에만 접근할 수 있습니다."
+                        403 -> if (path == "auth/verify-password" || path == "users/me") "비밀번호가 일치하지 않습니다." else "내가 만든 설문에만 접근할 수 있습니다."
                         503 -> if (path == "coupons/exchange") {
                             "교환 처리가 지연되고 있습니다. 같은 상품으로 다시 시도해주세요."
                         } else if (path.startsWith("payments/")) {

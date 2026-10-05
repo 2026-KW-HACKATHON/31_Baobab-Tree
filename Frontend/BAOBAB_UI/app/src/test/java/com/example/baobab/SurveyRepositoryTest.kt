@@ -151,20 +151,46 @@ class SurveyRepositoryTest {
     @Test
     fun patchesProfileWithAuthenticationAndOptionalFieldsCanBeCleared() {
         body = """{"id":42,"name":"New Name","email":"new@example.com","loginId":"author","point":300,"region":null,"ageGroup":null}"""
-        val user = repository.updateProfile("profile-token", " New Name ", "new@example.com", "", "")
+        val user = repository.updateProfile("profile-token", " New Name ", "new@example.com", "", "", "password")
         assertEquals("PATCH", requestedMethod)
         assertEquals("/api/users/me", requestedPath)
         assertEquals("Bearer profile-token", authorization)
         assertEquals("New Name", user.name)
         val payload = com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java)
         assertEquals("New Name", payload.get("name").asString)
+        assertEquals("password", payload.get("currentPassword").asString)
         assertTrue(payload.get("region").isJsonNull)
         assertTrue(payload.get("ageGroup").isJsonNull)
         assertFalse(payload.has("point"))
-        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "", "new@example.com", "", "") }
-        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "invalid", "", "") }
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "", "new@example.com", "", "", "password") }
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "invalid", "", "", "password") }
         status = 409
-        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "taken@example.com", "", "") }
+        assertThrows(SurveyApiException::class.java) { repository.updateProfile("profile-token", "Name", "taken@example.com", "", "", "password") }
+    }
+
+    @Test
+    fun passwordVerificationUsesAuthenticatedRequestAndRejectsWrongPasswordWithoutLoggingOut() {
+        body = """{"verified":true}"""
+        repository.verifyPassword("profile-token", " password ")
+        assertEquals("POST", requestedMethod)
+        assertEquals("/api/auth/verify-password", requestedPath)
+        assertEquals("Bearer profile-token", authorization)
+        val payload = com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java)
+        assertEquals(" password ", payload.get("password").asString)
+        status = 403
+        val error = assertThrows(SurveyApiException::class.java) { repository.verifyPassword("profile-token", "wrong") }
+        assertEquals(403, error.status)
+        assertEquals("비밀번호가 일치하지 않습니다.", error.message)
+    }
+
+    @Test
+    fun signupSendsChosenMembershipAndOtherDescription() {
+        body = """{"message":"Signed up"}"""
+        repository.signup("Name", "name@example.com", "login", "password", "OTHER", " 지역 상인 ")
+        assertEquals("/api/auth/signup", requestedPath)
+        val payload = com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java)
+        assertEquals("OTHER", payload.get("memberType").asString)
+        assertEquals("지역 상인", payload.get("memberDetail").asString)
     }
 
     @Test

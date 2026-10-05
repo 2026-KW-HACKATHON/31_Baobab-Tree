@@ -32,7 +32,7 @@ private val DetailMuted = Color(0xFF697369)
 @Composable
 fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem = SampleSurveys.first(),
     onRelatedSurveyClick: (SurveyItem) -> Unit = {}, relatedSurveys: List<SurveyItem> = emptyList(),
-    canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}) {
+    canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}, onEdit: () -> Unit = {}) {
     val context = LocalContext.current
     val related = relatedSurveys.filter { it.category == survey.category && it.id != survey.id }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
@@ -41,6 +41,7 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
             IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = DetailGreen) }
             Text("설문 상세", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             IconButton(onClick = { shareSurvey(context, survey) }) { Icon(Icons.Outlined.Share, "설문 공유", tint = DetailGreen) }
+            if (canDelete) TextButton(onEdit) { Text("수정") }
             if (canDelete) TextButton(onDelete) { Text("삭제", color = MaterialTheme.colorScheme.error) }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),

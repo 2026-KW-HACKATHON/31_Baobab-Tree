@@ -111,8 +111,8 @@ class AccountViewModel(
         })
     }
 
-    fun signup(name: String, email: String, id: String, password: String, success: () -> Unit) = runRequest({
-        repository.signup(name, email, id, password)
+    fun signup(name: String, email: String, id: String, password: String, memberType: String, memberDetail: String, success: () -> Unit) = runRequest({
+        repository.signup(name, email, id, password, memberType, memberDetail)
     }, { success() })
 
     fun create(draft: CompletedSurveyDraft, success: () -> Unit) {
@@ -121,6 +121,11 @@ class AccountViewModel(
             surveyPayload(draft)
             repository.createSurvey(draft, credential)
         }, { success() })
+    }
+
+    fun editSurvey(survey: SurveyItem, draft: CompletedSurveyDraft, status: String, success: () -> Unit) {
+        val credential = token ?: run { error = "설문 수정에는 로그인이 필요합니다."; return }
+        runRequest({ repository.updateSurvey(survey, draft, status, credential) }, { success() })
     }
 
     fun deleteSurvey(survey: SurveyItem, success: () -> Unit) {
