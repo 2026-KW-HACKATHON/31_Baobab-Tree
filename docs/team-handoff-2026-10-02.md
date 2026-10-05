@@ -1,4 +1,26 @@
-# 10/02 작업 공유 — 프론트·백엔드 연동
+# 작업 공유 — 프론트·백엔드 연동과 배포 사용법
+
+## 10/05 최신 사용 안내
+
+팀 공유 브랜치는 `mok`입니다. Vercel + Neon PostgreSQL 전환 코드와 기존 SQLite 데이터 이전 도구가 반영됐습니다.
+**실제 클라우드 배포·데이터 이전·클라우드 주소 APK 제작은 아직 완료되지 않았습니다.**
+아래 10/02·10/03 기록은 당시 작업 이력이며, 현재 실행 방법은 이 최신 안내와 [사용·배포 안내](deployment.md)를 기준으로 합니다.
+
+| 담당 | 할 일 |
+| --- | --- |
+| 서버 배포 담당자 | Neon 생성 → 루트 개인 `.env`에 DB 주소 입력 → `npm ci`, `npm run db:migrate:deploy` → 기존 DB가 있는 PC에서 `npm run db:import:sqlite` → Vercel에 `mok`/루트 폴더 연결 → 환경변수 입력 → 배포·`/api/health` 확인 |
+| Android 담당자 | 서버 확인 후 `Frontend/BAOBAB_UI`에서 `.\gradlew.bat :app:assembleDebug -PsurveyApiBaseUrl=https://<실제-주소>/api/` → `app/build/outputs/apk/debug/app-debug.apk` 공유 |
+| APK 테스트 팀원 | 배포 주소가 반영된 APK 설치 → 기존 계정 로그인 → 설문·잔액·쿠폰 확인 → 토스/카카오 테스트 결제. 개인 `.env`나 로컬 서버는 필요 없음 |
+| 로컬 개발자 | 개인 `.env`의 `DATABASE_URL`이 비어 있으면 SQLite, 채워져 있으면 해당 PostgreSQL을 사용. 새 로컬 SQLite는 `npm run db:push:local`로 생성 |
+
+`.env`와 `prisma/dev.db`는 clone/pull로 전달되지 않습니다. 결제 키는 서버 담당자가 별도로 설정하고,
+기존 데이터는 실제 원본 DB에서 한 번 이전합니다. PC의 `.env`와 Vercel 환경변수는 각각 설정해야 합니다.
+희망 도메인 `baobab-api.vercel.app`은 아직 확정된 배포 주소가 아닙니다.
+
+상세 화면 설정·복사할 명령·주소 표·오류 해결은 [사용·배포 안내](deployment.md)에 정리했습니다.
+10/05 로컬 테스트는 27개 통과했고, 실제 PostgreSQL 연결이 필요한 2개는 아직 미실행입니다.
+
+## 10/02 작업 기록
 
 프론트 겸 PM인 mok이 화면 연결과 함께 백엔드 계약 정리·인증·응답 저장까지 진행했습니다. 다른 세 명은 아래 기준을 확인한 뒤 기존 담당 작업을 이어가면 됩니다.
 
@@ -44,11 +66,11 @@
 
 ## 각자 실행하는 방법
 
-저장소 루트에서 실행합니다. `db:push`는 로컬 DB를 변경하므로 기존 데이터가 있다면 스키마와 이전 필요 여부부터 확인하세요.
+아래는 로컬 SQLite 개발용 명령입니다. 저장소 루트에서 실행합니다. `db:push:local`은 로컬 DB를 변경하므로 기존 데이터가 있다면 스키마와 이전 필요 여부부터 확인하세요.
 
 ```powershell
 npm ci
-npm run db:push
+npm run db:push:local
 npm run db:seed:examples
 npm start
 ```
