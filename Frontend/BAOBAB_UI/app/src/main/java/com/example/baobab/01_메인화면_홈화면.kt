@@ -1,4 +1,5 @@
 package com.example.baobab
+import androidx.compose.foundation.layout.offset
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
@@ -214,25 +215,112 @@ private fun HomeCategoryBar(
 }
 
 @Composable
-fun SurveyFeedCard(survey: SurveyItem, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().shadow(2.dp, shape).clip(shape).background(Color.White)
-        .clickable(onClick = onClick).padding(7.dp)) {
-        SurveyImage(survey, Modifier.fillMaxWidth().aspectRatio(2.2f).clip(RoundedCornerShape(10.dp)), ContentScale.Crop)
-        Column(Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(survey.category, Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(survey.badgeColor)
-                    .padding(horizontal = 6.dp, vertical = 4.dp), color = survey.badgeTextColor,
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(survey.points, Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9DBB8))
-                    .padding(horizontal = 6.dp, vertical = 4.dp), color = HomeGreen, fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold, maxLines = 1)
-            }
-            Text(survey.title, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold,
-                minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(survey.author, color = HomeMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+fun SurveyFeedCard(
+    survey: SurveyItem,
+    onClick: () -> Unit
+) {
+    val cardShape = RoundedCornerShape(18.dp)
+    val badgeShape = RoundedCornerShape(10.dp)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(3.dp, cardShape)
+            .clip(cardShape)
+            .background(Color.White)
+            .clickable(onClick = onClick)
+            .padding(8.dp)
+    ) {
+
+        // 이미지
+        // 이미지 + 카테고리 배지
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+        ) {
+            SurveyImage(
+                survey,
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.55f)
+                    .clip(RoundedCornerShape(13.dp)),
+                ContentScale.Crop
+            )
+
+            Text(
+                text = survey.category,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 7.dp)
+                    .offset(y = 13  .dp)
+                    .clip(badgeShape)
+                    .background(Color(0xFFF6E2E3))
+                    .border(
+                        width = 3.dp,
+                        color = Color.White,
+                        shape = badgeShape
+                    )
+                    .padding(
+                        horizontal = 11.dp,
+                        vertical = 8.dp
+                    ),
+                color = Color(0xFF800000),
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+        // 제목
+        Text(
+            text = survey.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 4.dp,
+                    end = 4.dp,
+                    top = 7.dp
+                ),
+            color = Color.Black,
+            fontSize = 15.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.Black,
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        // 작성자 + 포인트
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 4.dp,
+                    end = 4.dp,
+                    top = 12.dp,
+                    bottom = 4.dp
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = survey.author,
+                modifier = Modifier.weight(1f),
+                color = Color(0xFF666666),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = survey.points,
+                color = HomeGreen,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
     }
 }
