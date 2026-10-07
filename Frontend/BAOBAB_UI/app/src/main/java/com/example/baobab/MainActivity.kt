@@ -32,11 +32,43 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openSharedSurvey(intent)
+
+        if (isPaymentReturn(intent)) {
+            val account =
+                ViewModelProvider(this)[AccountViewModel::class.java]
+
+            val myPage =
+                ViewModelProvider(this)[MyPageViewModel::class.java]
+
+            if (account.token != null) {
+                myPage.load(account.token)
+            } else {
+                account.restoreSession {
+                    myPage.load(account.token)
+                }
+            }
+        }
+    }
+
+    private fun isPaymentReturn(intent: Intent): Boolean {
+        val uri = intent.data ?: return false
+
+        return intent.action == Intent.ACTION_VIEW &&
+                uri.scheme == "baobab" &&
+                uri.host == "payments" &&
+                uri.path == "/return"
     }
 
     private fun openSharedSurvey(intent: Intent) {
-        if (intent.action == Intent.ACTION_VIEW) sharedSurveyId(intent.dataString)?.let {
-            navigation.openSurvey(SurveyItem(id = it))
+        if (isPaymentReturn(intent)) {
+            navigation.navigate(BaobabScreen.POINTS)
+            return
+        }
+
+        if (intent.action == Intent.ACTION_VIEW) {
+            sharedSurveyId(intent.dataString)?.let {
+                navigation.openSurvey(SurveyItem(id = it))
+            }
         }
     }
 
@@ -53,7 +85,15 @@ class MainActivity : ComponentActivity() {
         })[AccountViewModel::class.java]
         val participation = ViewModelProvider(this)[ParticipationViewModel::class.java]
         val myPage = ViewModelProvider(this)[MyPageViewModel::class.java]
-        if (savedInstanceState == null) openSharedSurvey(intent)
+        if (savedInstanceState == null) {
+            openSharedSurvey(intent)
+
+            if (isPaymentReturn(intent)) {
+                account.restoreSession {
+                    myPage.load(account.token)
+                }
+            }
+        }
 
 
         setContent {
@@ -91,355 +131,408 @@ class MainActivity : ComponentActivity() {
                         })
                 }
 
-                BackHandler(enabled = viewModel.canGoBack || account.busy) {
-                    if (!account.busy) viewModel.goBack()
-                }
+                SurveyDraftSupport(
+                    model = viewModel,
+                    token = account.token,
+                    submitting = account.busy
+                ) { onDraftCreate, onDraftBack, onDraftCreated ->
 
-                when (viewModel.currentScreen) {
-
-                    // 로그인
-                    BaobabScreen.LOGIN -> {
-                        LocalNetworkPermissionGate {
-                            LaunchedEffect(Unit) {
-                                account.restoreSession { restored ->
-                                    if (restored && viewModel.currentScreen == BaobabScreen.LOGIN) viewModel.goHome()
-                                }
-                            }
-                            AccountScreen(false, account,
-                                onSuccess = {
-                                    if (viewModel.resumeParticipationAfterLogin) {
-                                        viewModel.resumeParticipationAfterLogin = false
-                                        viewModel.navigate(BaobabScreen.DETAIL)
-                                        account.checkParticipation(requireNotNull(participation.survey)) {
-                                            viewModel.navigate(BaobabScreen.PARTICIPATE)
-                                        }
-                                    } else if (viewModel.resumeCreationAfterLogin) {
-                                        viewModel.resumeCreationAfterLogin = false
-                                        viewModel.beginCreation()
-                                    } else viewModel.goHome()
-                                },
-                                onSwitch = { account.clearError(); viewModel.navigate(BaobabScreen.START) },
-                                onGuest = { viewModel.resumeParticipationAfterLogin = false; viewModel.resumeCreationAfterLogin = false; viewModel.goHome() })
-                        }
+                    BackHandler(enabled = viewModel.canGoBack || account.busy) {
+                        if (!account.busy) onDraftBack()
                     }
 
-                    // 시작 화면
-                    BaobabScreen.START -> {
-                        LocalNetworkPermissionGate {
-                            AccountScreen(true, account,
-                                onSuccess = { account.clearError(); viewModel.goBack() },
-                                onSwitch = { account.clearError(); viewModel.goBack() }, onGuest = {})
-                        }
-                    }
+                    when (viewModel.currentScreen) {
 
-                    // 홈
-                    BaobabScreen.HOME -> {
-                        LocalNetworkPermissionGate {
-                            LaunchedEffect(Unit) { surveyData.loadSurveys() }
-                            LaunchedEffect(account.token) { myPage.load(account.token) }
-                            HomeScreen(
-                                currentPoint = myPage.profile?.point ?: account.point,
-                                loggedIn = account.token != null,
-                                onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
-                                surveys = surveyData.listState.data.orEmpty(),
-                                loading = surveyData.listState.loading,
-                                error = surveyData.listState.error,
-                                onRetry = { surveyData.loadSurveys(force = true); myPage.load(account.token) },
-                                searchTerm = viewModel.homeSearchTerm,
-                                onSearchTermChange = { viewModel.homeSearchTerm = it },
-                                onSurveyClick = { survey ->
-                                    viewModel.openSurvey(survey)
-                                },
-                                onSearchClick = { query -> viewModel.openSearch(query) },
-                                onCreateSurveyClick = {
-                                    if (account.token != null) viewModel.beginCreation()
-                                    else {
-                                        viewModel.resumeCreationAfterLogin = true
-                                        account.clearError()
-                                        viewModel.navigate(BaobabScreen.LOGIN)
+                        // 로그인
+                        BaobabScreen.LOGIN -> {
+                            LocalNetworkPermissionGate {
+                                LaunchedEffect(Unit) {
+                                    account.restoreSession { restored ->
+                                        if (restored && viewModel.currentScreen == BaobabScreen.LOGIN) viewModel.goHome()
                                     }
-                                },
-                                onMyClick = {
-                                    viewModel.navigate(BaobabScreen.MY)
                                 }
-                            )
-                        }
-                    }
-
-                    // 검색 결과
-                    BaobabScreen.SEARCH -> {
-                        LocalNetworkPermissionGate {
-                            LaunchedEffect(Unit) { surveyData.loadSurveys() }
-                            SearchResultsScreen(
-                                surveys = surveyData.listState.data.orEmpty(),
-                                loading = surveyData.listState.loading,
-                                error = surveyData.listState.error,
-                                onRetry = { surveyData.loadSurveys(force = true) },
-                                searchTerm = viewModel.searchTerm,
-                                category = viewModel.searchCategory,
-                                onCategoryChange = { viewModel.searchCategory = it },
-                                onSurveyClick = { survey ->
-                                    viewModel.openSurvey(survey)
-                                },
-                                onCreateSurveyClick = {
-                                    if (account.token != null) viewModel.beginCreation()
-                                    else {
-                                        viewModel.resumeCreationAfterLogin = true
-                                        account.clearError()
-                                        viewModel.navigate(BaobabScreen.LOGIN)
-                                    }
-                                },
-                                onMyClick = {
-                                    viewModel.navigate(BaobabScreen.MY)
-                                },
-                                onSearchTermChange = { viewModel.searchTerm = it },
-                                onBack = { viewModel.goBack() }
-                            )
-                        }
-                    }
-
-                    // 설문 상세
-                    BaobabScreen.DETAIL -> {
-                        LocalNetworkPermissionGate {
-                            LaunchedEffect(Unit) { account.restoreSession { } }
-                            val selected = requireNotNull(viewModel.selectedSurvey)
-                            LaunchedEffect(account.token) {
-                                if (account.token != null && myPage.profile == null) myPage.load(account.token)
-                            }
-                            LaunchedEffect(selected.id) { surveyData.loadDetail(selected.id) }
-                            SurveyRequestContent(
-                                loading = surveyData.detailId != selected.id || surveyData.detailState.loading,
-                                error = surveyData.detailState.error,
-                                data = surveyData.detailState.data,
-                                onRetry = { surveyData.loadDetail(selected.id) },
-                                modifier = Modifier.fillMaxSize()
-                            ) { survey ->
-                                key(survey.id) {
-                                    SurveyDetailScreen(
-                                        onBack = { viewModel.goBack() },
-                                        survey = survey,
-                                        canDelete = account.token != null && myPage.profile?.id != null &&
-                                            survey.userId == myPage.profile?.id,
-                                        onDelete = { account.clearError(); pendingDeletion = survey },
-                                        onEdit = { account.clearError(); viewModel.beginEditing(survey) },
-                                        relatedSurveys = surveyData.listState.data.orEmpty(),
-                                        onRelatedSurveyClick = { viewModel.openSurvey(it) },
-                                        onParticipateClick = {
-                                            account.clearError()
-                                            participation.begin(survey)
-                                            if (account.token == null) {
-                                                viewModel.resumeCreationAfterLogin = false
-                                                viewModel.resumeParticipationAfterLogin = true
-                                                viewModel.navigate(BaobabScreen.LOGIN)
-                                            } else account.checkParticipation(survey) {
+                                AccountScreen(
+                                    false, account,
+                                    onSuccess = {
+                                        if (viewModel.resumeParticipationAfterLogin) {
+                                            viewModel.resumeParticipationAfterLogin = false
+                                            viewModel.navigate(BaobabScreen.DETAIL)
+                                            account.checkParticipation(requireNotNull(participation.survey)) {
                                                 viewModel.navigate(BaobabScreen.PARTICIPATE)
                                             }
+                                        } else if (viewModel.resumeCreationAfterLogin) {
+                                            viewModel.resumeCreationAfterLogin = false
+                                            onDraftCreate()
+                                        } else viewModel.goHome()
+                                    },
+                                    onSwitch = {
+                                        account.clearError(); viewModel.navigate(
+                                        BaobabScreen.START
+                                    )
+                                    },
+                                    onGuest = {
+                                        viewModel.resumeParticipationAfterLogin =
+                                            false; viewModel.resumeCreationAfterLogin =
+                                        false; viewModel.goHome()
+                                    })
+                            }
+                        }
+
+                        // 시작 화면
+                        BaobabScreen.START -> {
+                            LocalNetworkPermissionGate {
+                                AccountScreen(
+                                    true,
+                                    account,
+                                    onSuccess = { account.clearError(); viewModel.goBack() },
+                                    onSwitch = { account.clearError(); viewModel.goBack() },
+                                    onGuest = {})
+                            }
+                        }
+
+                        // 홈
+                        BaobabScreen.HOME -> {
+                            LocalNetworkPermissionGate {
+                                LaunchedEffect(Unit) { surveyData.loadSurveys() }
+                                LaunchedEffect(account.token) { myPage.load(account.token) }
+                                HomeScreen(
+                                    currentPoint = myPage.profile?.point ?: account.point,
+                                    loggedIn = account.token != null,
+                                    onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
+                                    surveys = surveyData.listState.data.orEmpty(),
+                                    loading = surveyData.listState.loading,
+                                    error = surveyData.listState.error,
+                                    onRetry = {
+                                        surveyData.loadSurveys(force = true); myPage.load(
+                                        account.token
+                                    )
+                                    },
+                                    searchTerm = viewModel.homeSearchTerm,
+                                    onSearchTermChange = { viewModel.homeSearchTerm = it },
+                                    onSurveyClick = { survey ->
+                                        viewModel.openSurvey(survey)
+                                    },
+                                    onSearchClick = { query -> viewModel.openSearch(query) },
+                                    onCreateSurveyClick = {
+                                        if (account.token != null) onDraftCreate()
+                                        else {
+                                            viewModel.resumeCreationAfterLogin = true
+                                            account.clearError()
+                                            viewModel.navigate(BaobabScreen.LOGIN)
+                                        }
+                                    },
+                                    onMyClick = {
+                                        viewModel.navigate(BaobabScreen.MY)
+                                    }
+                                )
+                            }
+                        }
+
+                        // 검색 결과
+                        BaobabScreen.SEARCH -> {
+                            LocalNetworkPermissionGate {
+                                LaunchedEffect(Unit) { surveyData.loadSurveys() }
+                                SearchResultsScreen(
+                                    surveys = surveyData.listState.data.orEmpty(),
+                                    loading = surveyData.listState.loading,
+                                    error = surveyData.listState.error,
+                                    onRetry = { surveyData.loadSurveys(force = true) },
+                                    searchTerm = viewModel.searchTerm,
+                                    category = viewModel.searchCategory,
+                                    onCategoryChange = { viewModel.searchCategory = it },
+                                    onSurveyClick = { survey ->
+                                        viewModel.openSurvey(survey)
+                                    },
+                                    onCreateSurveyClick = {
+                                        if (account.token != null) viewModel.beginCreation()
+                                        else {
+                                            viewModel.resumeCreationAfterLogin = true
+                                            account.clearError()
+                                            viewModel.navigate(BaobabScreen.LOGIN)
+                                        }
+                                    },
+                                    onMyClick = {
+                                        viewModel.navigate(BaobabScreen.MY)
+                                    },
+                                    onSearchTermChange = { viewModel.searchTerm = it },
+                                    onBack = { viewModel.goBack() }
+                                )
+                            }
+                        }
+
+                        // 설문 상세
+                        BaobabScreen.DETAIL -> {
+                            LocalNetworkPermissionGate {
+                                LaunchedEffect(Unit) { account.restoreSession { } }
+                                val selected = requireNotNull(viewModel.selectedSurvey)
+                                LaunchedEffect(account.token) {
+                                    if (account.token != null && myPage.profile == null) myPage.load(
+                                        account.token
+                                    )
+                                }
+                                LaunchedEffect(selected.id) { surveyData.loadDetail(selected.id) }
+                                SurveyRequestContent(
+                                    loading = surveyData.detailId != selected.id || surveyData.detailState.loading,
+                                    error = surveyData.detailState.error,
+                                    data = surveyData.detailState.data,
+                                    onRetry = { surveyData.loadDetail(selected.id) },
+                                    modifier = Modifier.fillMaxSize()
+                                ) { survey ->
+                                    key(survey.id) {
+                                        SurveyDetailScreen(
+                                            onBack = { viewModel.goBack() },
+                                            survey = survey,
+                                            canDelete = account.token != null && myPage.profile?.id != null &&
+                                                    survey.userId == myPage.profile?.id,
+                                            onDelete = {
+                                                account.clearError(); pendingDeletion = survey
+                                            },
+                                            onEdit = {
+                                                account.clearError(); viewModel.beginEditing(
+                                                survey
+                                            )
+                                            },
+                                            relatedSurveys = surveyData.listState.data.orEmpty(),
+                                            onRelatedSurveyClick = { viewModel.openSurvey(it) },
+                                            onParticipateClick = {
+                                                account.clearError()
+                                                participation.begin(survey)
+                                                if (account.token == null) {
+                                                    viewModel.resumeCreationAfterLogin = false
+                                                    viewModel.resumeParticipationAfterLogin = true
+                                                    viewModel.navigate(BaobabScreen.LOGIN)
+                                                } else account.checkParticipation(survey) {
+                                                    viewModel.navigate(BaobabScreen.PARTICIPATE)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 설문 참여 완료
+                        BaobabScreen.PARTICIPATE -> {
+                            LocalNetworkPermissionGate {
+                                val survey = requireNotNull(participation.survey)
+                                ParticipationScreen(
+                                    survey, participation.answers, account.busy, account.error,
+                                    onAnswer = { id, value -> participation.answers[id] = value },
+                                    onSubmit = {
+                                        account.participate(survey, participation.answers) {
+                                            viewModel.navigate(BaobabScreen.SURVEY_COMPLETE)
+                                            surveyData.loadSurveys(force = true)
+                                            surveyData.loadDetail(survey.id)
+                                        }
+                                    },
+                                    onBack = { viewModel.goBack() },
+                                    needsLogin = account.token == null,
+                                    onLogin = {
+                                        account.clearError()
+                                        viewModel.resumeCreationAfterLogin = false
+                                        viewModel.resumeParticipationAfterLogin = true
+                                        viewModel.navigate(BaobabScreen.LOGIN)
+                                    })
+                            }
+                        }
+
+                        BaobabScreen.SURVEY_COMPLETE -> {
+                            SurveyCompletionScreen(
+                                result = account.participationResult,
+                                onHomeClick = {
+                                    viewModel.goHome()
+                                }
+                            )
+                        }
+
+                        // 설문 작성 1단계
+                        BaobabScreen.CREATE_ONE -> {
+                            SurveyCreationStepOneScreen(
+                                state = viewModel.creationState,
+                                onBackClick = { onDraftBack() },
+                                onNextClick = { _ ->
+                                    viewModel.navigate(BaobabScreen.CREATE_TWO)
+                                }
+                            )
+                        }
+
+                        // 설문 작성 2단계
+                        BaobabScreen.CREATE_TWO -> {
+                            SurveyCreationStepTwoScreen(
+                                state = viewModel.creationState,
+                                onBackClick = { onDraftBack() },
+                                onNextClick = { _ ->
+                                    viewModel.navigate(BaobabScreen.CREATE_THREE)
+                                }
+                            )
+                        }
+
+                        // 설문 작성 3단계
+                        BaobabScreen.CREATE_THREE -> {
+                            LocalNetworkPermissionGate {
+                                SurveyCreationStepThreeScreen(
+                                    currentPoint = myPage.profile?.point ?: account.point,
+                                    submitting = account.busy,
+                                    error = account.error,
+                                    state = viewModel.creationState,
+                                    onBackClick = { if (!account.busy) onDraftBack() },
+                                    onCompleteClick = { settings ->
+                                        if (account.token == null) {
+                                            viewModel.resumeCreationAfterLogin = true
+                                            viewModel.navigate(BaobabScreen.LOGIN)
+                                        } else {
+                                            val draft = viewModel.snapshotDraft(settings)
+                                            account.create(draft) {
+                                                onDraftCreated()
+                                                viewModel.completeCreation(draft)
+                                                myPage.load(account.token)
+                                                surveyData.loadSurveys(force = true)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
+                        }
+
+                        // 설문 작성 완료
+                        BaobabScreen.CREATE_COMPLETE -> {
+                            SurveyCreationCompleteScreen(
+                                onHomeClick = {
+                                    viewModel.goHome()
+                                }
+                            )
+                        }
+
+                        BaobabScreen.POINTS -> {
+                            LocalNetworkPermissionGate {
+                                LaunchedEffect(account.token) {
+                                    myPage.load(account.token)
+                                }
+
+                                // 결제 브라우저에서 앱으로 돌아오면 잔액 갱신
+                                DisposableEffect(account.token) {
+                                    val activityLifecycle =
+                                        this@MainActivity.lifecycle
+
+                                    val observer = LifecycleEventObserver { _, event ->
+                                        if (event == Lifecycle.Event.ON_RESUME) {
+                                            myPage.load(account.token)
+                                        }
+                                    }
+
+                                    activityLifecycle.addObserver(observer)
+
+                                    onDispose {
+                                        activityLifecycle.removeObserver(observer)
+                                    }
+                                }
+
+                                key(account.token) {
+                                    PointWalletScreen(
+                                        point = myPage.profile?.point,
+                                        coupons = myPage.coupons,
+                                        exchangeBusy = myPage.exchangingCoupon,
+                                        exchangeError = myPage.couponError,
+                                        onExchange = { itemId, onSuccess ->
+                                            account.token?.let { token ->
+                                                myPage.exchangeCoupon(
+                                                    token = token,
+                                                    itemId = itemId,
+                                                    success = onSuccess
+                                                )
+                                            }
+                                        },
+                                        loggedIn = account.token != null,
+                                        loading = myPage.loading,
+                                        error = myPage.error,
+                                        paymentBusy = account.busy ||
+                                                myPage.exchangingCoupon,
+                                        paymentError = account.error,
+                                        onCharge = { provider, amount ->
+                                            account.startPointPayment(
+                                                provider = provider,
+                                                amount = amount
+                                            ) { checkoutUrl ->
+                                                try {
+                                                    startActivity(
+                                                        Intent(
+                                                            Intent.ACTION_VIEW,
+                                                            Uri.parse(checkoutUrl)
+                                                        )
+                                                    )
+                                                } catch (_: ActivityNotFoundException) {
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "결제창을 열 브라우저가 없습니다.",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
+                                            }
+                                        },
+                                        onHistoryClick = {
+                                            viewModel.navigate(BaobabScreen.POINT_HISTORY)
+                                        },
+                                        onRetry = {
+                                            myPage.load(account.token)
+                                        },
+                                        onBack = {
+                                            viewModel.goBack()
+                                        },
+                                        onLogin = {
+                                            account.clearError()
+                                            viewModel.navigate(BaobabScreen.LOGIN)
                                         }
                                     )
                                 }
                             }
                         }
-                    }
 
-                    // 설문 참여 완료
-                    BaobabScreen.PARTICIPATE -> {
-                        LocalNetworkPermissionGate {
-                            val survey = requireNotNull(participation.survey)
-                            ParticipationScreen(survey, participation.answers, account.busy, account.error,
-                                onAnswer = { id, value -> participation.answers[id] = value },
-                                onSubmit = {
-                                    account.participate(survey, participation.answers) {
-                                        viewModel.navigate(BaobabScreen.SURVEY_COMPLETE)
-                                        surveyData.loadSurveys(force = true)
-                                        surveyData.loadDetail(survey.id)
-                                    }
-                                },
-                                onBack = { viewModel.goBack() },
-                                needsLogin = account.token == null,
-                                onLogin = {
-                                    account.clearError()
-                                    viewModel.resumeCreationAfterLogin = false
-                                    viewModel.resumeParticipationAfterLogin = true
-                                    viewModel.navigate(BaobabScreen.LOGIN)
-                                })
-                        }
-                    }
-
-                    BaobabScreen.SURVEY_COMPLETE -> {
-                        SurveyCompletionScreen(
-                            result = account.participationResult,
-                            onHomeClick = {
-                                viewModel.goHome()
-                            }
-                        )
-                    }
-
-                    // 설문 작성 1단계
-                    BaobabScreen.CREATE_ONE -> {
-                        SurveyCreationStepOneScreen(
-                            state = viewModel.creationState,
-                            onBackClick = { viewModel.goBack() },
-                            onNextClick = { _ ->
-                                viewModel.navigate(BaobabScreen.CREATE_TWO)
-                            }
-                        )
-                    }
-
-                    // 설문 작성 2단계
-                    BaobabScreen.CREATE_TWO -> {
-                        SurveyCreationStepTwoScreen(
-                            state = viewModel.creationState,
-                            onBackClick = { viewModel.goBack() },
-                            onNextClick = { _ ->
-                                viewModel.navigate(BaobabScreen.CREATE_THREE)
-                            }
-                        )
-                    }
-
-                    // 설문 작성 3단계
-                    BaobabScreen.CREATE_THREE -> {
-                        LocalNetworkPermissionGate {
-                        SurveyCreationStepThreeScreen(
-                            currentPoint = myPage.profile?.point ?: account.point,
-                            submitting = account.busy,
-                            error = account.error,
-                            state = viewModel.creationState,
-                            onBackClick = { if (!account.busy) viewModel.goBack() },
-                            onCompleteClick = { settings ->
-                                if (account.token == null) {
-                                    viewModel.resumeCreationAfterLogin = true
-                                    viewModel.navigate(BaobabScreen.LOGIN)
-                                } else {
-                                    val draft = viewModel.snapshotDraft(settings)
-                                    account.create(draft) {
-                                        viewModel.completeCreation(draft)
-                                        myPage.load(account.token)
-                                        surveyData.loadSurveys(force = true)
-                                    }
-                                }
-                            }
-                        )
-                    }
-
-                    }
-
-                    // 설문 작성 완료
-                    BaobabScreen.CREATE_COMPLETE -> {
-                        SurveyCreationCompleteScreen(
-                            onHomeClick = {
-                                viewModel.goHome()
-                            }
-                        )
-                    }
-
-                    BaobabScreen.POINTS -> {
-                        LocalNetworkPermissionGate {
-                            LaunchedEffect(account.token) {
-                                myPage.load(account.token)
-                            }
-
-                            // 결제 브라우저에서 앱으로 돌아오면 잔액 갱신
-                            DisposableEffect(account.token) {
-                                val activityLifecycle =
-                                    this@MainActivity.lifecycle
-
-                                val observer = LifecycleEventObserver { _, event ->
-                                    if (event == Lifecycle.Event.ON_RESUME) {
-                                        myPage.load(account.token)
-                                    }
-                                }
-
-                                activityLifecycle.addObserver(observer)
-
-                                onDispose {
-                                    activityLifecycle.removeObserver(observer)
-                                }
-                            }
-
-                            key(account.token) {
-                                PointWalletScreen(
-                                    point = myPage.profile?.point,
-                                    coupons = myPage.coupons,
-                                    exchangeBusy = myPage.exchangingCoupon,
-                                    exchangeError = myPage.couponError,
-                                    onExchange = { itemId, onSuccess ->
-                                        account.token?.let { token ->
-                                            myPage.exchangeCoupon(
-                                                token = token,
-                                                itemId = itemId,
-                                                success = onSuccess
-                                            )
-                                        }
-                                    },
-                                    loggedIn = account.token != null,
-                                    loading = myPage.loading,
-                                    error = myPage.error,
-                                    paymentBusy = account.busy ||
-                                            myPage.exchangingCoupon,
-                                    paymentError = account.error,
-                                    onCharge = { provider, amount ->
-                                        account.startPointPayment(
-                                            provider = provider,
-                                            amount = amount
-                                        ) { checkoutUrl ->
-                                            try {
-                                                startActivity(
-                                                    Intent(
-                                                        Intent.ACTION_VIEW,
-                                                        Uri.parse(checkoutUrl)
-                                                    )
-                                                )
-                                            } catch (_: ActivityNotFoundException) {
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "결제창을 열 브라우저가 없습니다.",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            }
-                                        }
-                                    },
-                                    onRetry = {
-                                        myPage.load(account.token)
-                                    },
+                        BaobabScreen.POINT_HISTORY -> {
+                            LocalNetworkPermissionGate {
+                                PointHistoryScreen(
+                                    token = account.token,
                                     onBack = {
                                         viewModel.goBack()
-                                    },
-                                    onLogin = {
-                                        account.clearError()
-                                        viewModel.navigate(BaobabScreen.LOGIN)
                                     }
                                 )
                             }
                         }
-                    }
 
-                    BaobabScreen.EDIT -> {
-                        val survey = requireNotNull(viewModel.editingSurvey)
-                        SurveyEditScreen(survey, viewModel.editState, account.busy, account.error,
-                            onBack = { viewModel.goBack() },
-                            onSave = { draft, status ->
-                                account.editSurvey(survey, draft, status) {
-                                    viewModel.goBack()
-                                    surveyData.loadSurveys(force = true)
-                                    surveyData.loadDetail(survey.id)
-                                    myPage.load(account.token)
-                                }
-                            })
-                    }
+                        BaobabScreen.EDIT -> {
+                            val survey = requireNotNull(viewModel.editingSurvey)
+                            SurveyEditScreen(
+                                survey, viewModel.editState, account.busy, account.error,
+                                onBack = { viewModel.goBack() },
+                                onSave = { draft, status ->
+                                    account.editSurvey(survey, draft, status) {
+                                        viewModel.goBack()
+                                        surveyData.loadSurveys(force = true)
+                                        surveyData.loadDetail(survey.id)
+                                        myPage.load(account.token)
+                                    }
+                                })
+                        }
 
-                    // MY
-                    BaobabScreen.MY -> {
-                        LocalNetworkPermissionGate {
-                            MyPageScreen(myPage, account.token,
-                                onBack = { viewModel.goHome() },
-                                onLogin = { account.clearError(); viewModel.navigate(BaobabScreen.LOGIN) },
-                                onLogout = { account.logout(); myPage.load(null); viewModel.goHome() },
-                                onCreate = { viewModel.beginCreation() },
-                                onProfileUpdated = { surveyData.loadSurveys(force = true) },
-                                onEdit = { account.clearError(); viewModel.beginEditing(it) },
-                                onOpenSurvey = { viewModel.openSurvey(SurveyItem(id = it)) },
-                                onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
-                                onDelete = { account.clearError(); pendingDeletion = it })
+                        // MY
+                        BaobabScreen.MY -> {
+                            LocalNetworkPermissionGate {
+                                MyPageScreen(
+                                    myPage, account.token,
+                                    onBack = { viewModel.goHome() },
+                                    onLogin = {
+                                        account.clearError(); viewModel.navigate(
+                                        BaobabScreen.LOGIN
+                                    )
+                                    },
+                                    onLogout = { account.logout(); myPage.load(null); viewModel.goHome() },
+                                    onCreate = { onDraftCreate() },
+                                    onProfileUpdated = { surveyData.loadSurveys(force = true) },
+                                    onEdit = { account.clearError(); viewModel.beginEditing(it) },
+                                    onOpenSurvey = { viewModel.openSurvey(SurveyItem(id = it)) },
+                                    onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
+                                    onDelete = { account.clearError(); pendingDeletion = it })
+                            }
                         }
                     }
                 }

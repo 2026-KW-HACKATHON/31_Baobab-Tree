@@ -29,6 +29,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
     onDelete: (SurveyItem) -> Unit = {}, onProfileUpdated: () -> Unit = {},
     onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}, onEdit: (SurveyItem) -> Unit = {}) {
     val context = LocalContext.current
+    val onOpenDrafts = LocalSurveyDraftList.current
     var editingProfile by remember(token) { mutableStateOf(false) }
     var confirmingPassword by remember(token) { mutableStateOf(false) }
     var profilePassword by remember(token) { mutableStateOf("") }
@@ -120,6 +121,18 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             Text(user.email, color = MyMuted, fontSize = 14.sp)
                             if (!user.region.isNullOrBlank()) Text(user.region, color = MyMuted, fontSize = 14.sp)
                             if (!user.ageGroup.isNullOrBlank()) Text(user.ageGroup, color = MyMuted, fontSize = 14.sp)
+                        }
+                    }
+                    item {
+                        OutlinedButton(
+                            onClick = { onOpenDrafts?.invoke() },
+                            enabled = onOpenDrafts != null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "임시저장 설문 보기",
+                                color = MyGreen
+                            )
                         }
                     }
                     item {

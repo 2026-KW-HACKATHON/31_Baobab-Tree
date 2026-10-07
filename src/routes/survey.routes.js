@@ -6,6 +6,61 @@ const auth = require('../middlewares/auth.middleware');
 
 const allowedAmounts = [1000, 3000, 5000];
 
+function sendPaymentReturnPage(res) {
+  return res.type('html').send(`
+    <!doctype html>
+    <html lang="ko">
+    <head>
+      <meta charset="utf-8">
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+      >
+      <title>포인트 충전 완료</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 48px 24px;
+          font-family: sans-serif;
+          text-align: center;
+          background: #fdf9f1;
+          color: #26372b;
+        }
+
+        a {
+          display: inline-block;
+          margin-top: 24px;
+          padding: 16px 28px;
+          border-radius: 16px;
+          background: #2f5539;
+          color: white;
+          text-decoration: none;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>포인트 충전이 완료됐습니다.</h2>
+      <p>앱으로 돌아가 잔액을 확인해주세요.</p>
+
+      <a id="returnButton">앱으로 돌아가기</a>
+
+      <script>
+        const appUrl =
+          'intent://payments/return' +
+          '#Intent;scheme=baobab;' +
+          'package=com.example.baobab;end';
+
+        document.getElementById('returnButton').href = appUrl;
+
+        if (/Android/i.test(navigator.userAgent)) {
+          window.location.replace(appUrl);
+        }
+      </script>
+    </body>
+    </html>
+  `);
+}
+
 function fail(status, message, code) {
   throw Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
 }
@@ -554,7 +609,7 @@ function createSurveyRouter(service = new SurveyService()) {
         );
 
         if (order.creditedAt) {
-          return res.send('이미 포인트 충전이 완료된 주문입니다.');
+          return sendPaymentReturnPage(res);
         }
 
         if (
@@ -659,7 +714,7 @@ function createSurveyRouter(service = new SurveyService()) {
           '카카오페이 포인트 충전',
         );
 
-        res.send(`${order.creditPoint}포인트 충전이 완료됐습니다.`);
+        return sendPaymentReturnPage(res);
       } catch (error) {
         next(error);
       }
@@ -783,7 +838,17 @@ function createSurveyRouter(service = new SurveyService()) {
               const button = document.getElementById('pay');
               const message = document.getElementById('message');
 
-              button.addEventListener('click', async () => {
+              let opening = false;
+
+              // 처음에는 중간 결제 버튼을 숨깁니다.
+              button.hidden = true;
+              message.textContent = '토스 결제창을 여는 중입니다…';
+
+              async function openPayment() {
+                if (opening) return;
+                opening = true;
+
+                button.hidden = true;
                 button.disabled = true;
 
                 try {
@@ -802,15 +867,24 @@ function createSurveyRouter(service = new SurveyService()) {
                     orderId: config.orderId,
                     orderName: config.orderName,
                     successUrl: config.successUrl,
-                    failUrl: config.failUrl
+                    failUrl: config.failUrl,
+                    windowTarget: 'self'
                   });
                 } catch (error) {
+                  opening = false;
                   message.textContent =
                     error.message || '결제창을 열지 못했습니다.';
 
+                  button.textContent = '토스 결제창 다시 열기';
+                  button.hidden = false;
                   button.disabled = false;
                 }
-              });
+              }
+
+              button.addEventListener('click', openPayment);
+
+              // 별도 버튼 클릭 없이 바로 토스 결제창 요청
+              openPayment();
             </script>
           </body>
           </html>

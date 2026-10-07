@@ -61,6 +61,25 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             .also { require(it.id > 0 && it.name.isNotBlank() && it.point >= 0) }
     }
 
+    fun getPointHistory(token: String): PointHistoryResponse = parse {
+        val response = gson.fromJson(
+            request("users/me/points", token = token),
+            PointHistoryResponse::class.java
+        )
+
+        requireNotNull(response) {
+            "포인트 내역 응답이 비어 있습니다."
+        }
+
+        requireNotNull(response.histories) {
+            "포인트 내역 목록을 확인할 수 없습니다."
+        }
+
+        response.copy(
+            histories = response.histories.sortedByDescending { it.id }
+        )
+    }
+
     fun updateProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String): UserProfile = parse {
         if (name.isBlank()) throw SurveyApiException("이름을 입력해주세요.")
         if (!Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim()))

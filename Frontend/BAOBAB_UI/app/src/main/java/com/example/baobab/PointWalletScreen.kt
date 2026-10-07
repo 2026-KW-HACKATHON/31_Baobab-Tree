@@ -56,7 +56,7 @@ private val ExchangeItemIds = listOf(
 )
 
 @Composable
-fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, coupons: List<WalletCoupon>, exchangeBusy: Boolean, exchangeError: String?, onExchange: (String, () -> Unit) -> Unit, paymentBusy: Boolean, paymentError: String?, onCharge: (String, Int) -> Unit, onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit) {
+fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, coupons: List<WalletCoupon>, exchangeBusy: Boolean, exchangeError: String?, onExchange: (String, () -> Unit) -> Unit, paymentBusy: Boolean, paymentError: String?, onCharge: (String, Int) -> Unit, onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit, onHistoryClick: () -> Unit = {}) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var selectedAmount by rememberSaveable { mutableIntStateOf(1000) }
     var selectedProvider by rememberSaveable { mutableStateOf("KAKAOPAY") }
@@ -80,6 +80,16 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                         color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     Text("설문에 참여하고 포인트를 모아보세요", color = Color(0xFFDCE7D8), fontSize = 13.sp)
                 }
+            }
+            OutlinedButton(
+                onClick = onHistoryClick,
+                enabled = loggedIn,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "포인트 획득 · 사용 내역",
+                    color = WalletGreen
+                )
             }
             if (!loggedIn) Button(onLogin, Modifier.fillMaxWidth()) { Text("로그인하기") }
             if (loggedIn && loading) LinearProgressIndicator(Modifier.fillMaxWidth())
