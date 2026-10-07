@@ -1,7 +1,5 @@
 package com.example.baobab
 
-import android.view.View
-import android.webkit.WebView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +31,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
@@ -57,7 +57,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 
 private val SearchScreenBackground = Color(0xFFFDF9F1)
 private val SearchFieldBackground = Color(0xFFF4F1E9)
@@ -96,6 +95,8 @@ fun SearchResultsScreen(
 ) {
     var searchQuery by remember(searchTerm) { mutableStateOf(searchTerm) }
     var selectedCategory by remember(category) { mutableStateOf(category) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val visibleSurveys = surveys.filter { survey ->
         (selectedCategory == "전체" || survey.category == selectedCategory) &&
             (searchQuery.isBlank() || survey.title.contains(searchQuery, ignoreCase = true) ||
@@ -113,7 +114,7 @@ fun SearchResultsScreen(
             Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = SearchGreen) }
                 Box(Modifier.weight(1f)) {
-                    SearchField(searchQuery, { searchQuery = it; onSearchTermChange(it) })
+                    SearchField(searchQuery, { searchQuery = it; onSearchTermChange(it) }, searchFocusRequester)
                 }
             }
             SearchCategoryBar(
@@ -151,7 +152,10 @@ fun SearchResultsScreen(
         }
 
         SearchFloatingActions(
-            onMyClick = onMyClick,
+            onSearchClick = {
+                searchFocusRequester.requestFocus()
+                keyboardController?.show()
+            },
             onCreateSurveyClick = onCreateSurveyClick,
             modifier = Modifier.align(Alignment.BottomEnd)
         )
@@ -161,7 +165,8 @@ fun SearchResultsScreen(
 @Composable
 private fun SearchField(
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    focusRequester: FocusRequester
 ) {
     Box(
         modifier = Modifier
@@ -173,6 +178,7 @@ private fun SearchField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
+                .focusRequester(focusRequester)
                 .fillMaxWidth()
                 .height(40.dp),
             singleLine = true,
@@ -191,13 +197,13 @@ private fun SearchField(
                         .padding(start = 15.5.dp, end = 14.5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SvgAsset(
-                        assetName = "search_icon.svg",
-                        modifier = Modifier
-                            .size(width = 20.dp, height = 22.dp)
-                            .alpha(0.18f)
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = null,
+                        tint = SearchMuted,
+                        modifier = Modifier.size(22.dp)
                     )
-                    Box(modifier = Modifier.offset(x = (-2.5).dp)) {
+                    Box(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                         innerTextField()
                     }
                 }
@@ -256,25 +262,27 @@ private fun SearchCategoryBar(
 
 @Composable
 private fun SearchFloatingActions(
-    onMyClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onCreateSurveyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier.padding(end = 16.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
                 .background(SearchGreen)
-                .clickable(onClick = onMyClick),
+                .clickable(onClick = onSearchClick),
             contentAlignment = Alignment.Center
         ) {
-            SvgAsset(
-                assetName = "search_profile_icon.svg",
-                modifier = Modifier.size(30.dp)
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = "설문 검색",
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
             )
         }
         Box(
@@ -289,32 +297,6 @@ private fun SearchFloatingActions(
                 tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
-}
-
-@Composable
-private fun SvgAsset(
-    assetName: String,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            WebView(context).apply {
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                overScrollMode = View.OVER_SCROLL_NEVER
-                settings.javaScriptEnabled = false
-                loadDataWithBaseURL(
-                    "file:///android_asset/",
-                    """<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:transparent;width:100vw;height:100vh;overflow:hidden"><img src="$assetName" style="display:block;width:100%;height:100%;object-fit:contain"></body></html>""",
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
-            }
-        }
-    )
 }
 
 @Preview(showBackground = true, widthDp = 402, heightDp = 874)
