@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.AssignmentTurnedIn
@@ -100,7 +103,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
             }
             selected != null -> SurveyRequestContent(model.resultsLoading, model.resultsError, model.results,
                 { model.openResults(selected, token) }, Modifier.weight(1f).fillMaxWidth()) { results ->
-                ResultsContent(selected, results, onDelete, onShare, onEdit)
+                ResultsContent(selected, results, onDelete, onShare, onEdit, shareBusy)
             }
             else -> SurveyRequestContent(model.loading, model.error, model.profile,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
@@ -138,7 +141,8 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Text("계정 정보", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                TextButton(onClick = { model.clearProfileError(); profilePassword = ""; confirmingPassword = true }) { Text("수정") }
+                                BaobabActionButton(BaobabActionIcons.Edit, "프로필 수정",
+                                    { model.clearProfileError(); profilePassword = ""; confirmingPassword = true })
                             }
                             user.memberType?.let { type ->
                                 Text(if (type == "OTHER") "기타 · ${user.memberDetail.orEmpty()}" else MemberTypes[type].orEmpty(), color = MyGreen)
@@ -197,11 +201,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                                     Text("답변 통계 보기 →", color = MyGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    TextButton(onClick = { onEdit(survey) }) { Text("수정") }
-                                    TextButton(onClick = { onShare(survey) }, enabled = !shareBusy) { Text("공유") }
-                                    TextButton(onClick = { onDelete(survey) }) {
-                                        Text("삭제", color = MaterialTheme.colorScheme.error)
-                                    }
+                                    SurveyActionIcons(survey, onEdit, onShare, onDelete, shareBusy)
                                 }
                             }
                         }
@@ -289,8 +289,16 @@ private fun MyMetric(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
+private fun SurveyActionIcons(survey: SurveyItem, onEdit: (SurveyItem) -> Unit,
+    onShare: (SurveyItem) -> Unit, onDelete: (SurveyItem) -> Unit, shareBusy: Boolean) {
+    BaobabActionButton(BaobabActionIcons.Edit, "설문 수정", { onEdit(survey) })
+    BaobabActionButton(BaobabActionIcons.Share, "설문 공유", { onShare(survey) }, enabled = !shareBusy)
+    BaobabActionButton(BaobabActionIcons.Delete, "설문 삭제", { onDelete(survey) }, destructive = true)
+}
+
+@Composable
 internal fun ResultsContent(survey: SurveyItem, results: SurveyResults, onDelete: (SurveyItem) -> Unit,
-                            onShare: (SurveyItem) -> Unit, onEdit: (SurveyItem) -> Unit) {
+    onShare: (SurveyItem) -> Unit, onEdit: (SurveyItem) -> Unit, shareBusy: Boolean = false) {
     var byResponse by rememberSaveable(survey.id) { mutableStateOf(false) }
     var expandedQuestions by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }
     var expandedResponses by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }
@@ -300,9 +308,7 @@ internal fun ResultsContent(survey: SurveyItem, results: SurveyResults, onDelete
             Spacer(Modifier.height(16.dp))
             MyMetric("전체 응답", "${results.totalResponses}명", Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                TextButton({ onShare(survey) }) { Text("공유") }
-                TextButton({ onEdit(survey) }) { Text("설문 수정") }
-                TextButton({ onDelete(survey) }) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+                SurveyActionIcons(survey, onEdit, onShare, onDelete, shareBusy)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(!byResponse, { byResponse = false }, label = { Text("문항별 답변") })

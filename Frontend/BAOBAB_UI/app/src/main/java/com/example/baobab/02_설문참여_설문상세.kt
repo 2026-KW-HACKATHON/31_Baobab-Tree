@@ -39,9 +39,9 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = DetailGreen) }
             Text("설문 상세", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { onShare(survey) }, enabled = !shareBusy) { Icon(Icons.Outlined.Share, "설문 공유", tint = DetailGreen) }
-            if (canDelete) TextButton(onEdit) { Text("수정") }
-            if (canDelete) TextButton(onDelete) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+            if (canDelete) BaobabActionButton(BaobabActionIcons.Edit, "설문 수정", onEdit)
+            BaobabActionButton(BaobabActionIcons.Share, "설문 공유", { onShare(survey) }, enabled = !shareBusy)
+            if (canDelete) BaobabActionButton(BaobabActionIcons.Delete, "설문 삭제", onDelete, destructive = true)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -84,7 +84,7 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
                         Text("내 링크로 다른 사람이 설문을 완료하면 1명당 10P가 적립돼요.",
                             color = DetailMuted, fontSize = 14.sp, lineHeight = 22.sp)
                         TextButton(onClick = { onShare(survey) }, enabled = !shareBusy) {
-                            Icon(Icons.Outlined.Share, null, Modifier.size(18.dp))
+                            Icon(BaobabActionIcons.Share, null, Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(if (shareBusy) "잠시만 기다려주세요" else "링크 공유하기")
                         }
