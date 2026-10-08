@@ -1,5 +1,7 @@
 package com.example.baobab
 
+import androidx.compose.ui.graphics.Color
+
 val ParticipationPurposes = listOf("학술·연구", "가게·서비스", "지역·정책", "기타")
 
 // Preserve stored categories and images while presenting the new purpose taxonomy.
@@ -34,3 +36,21 @@ fun RecruitmentItem.feedItem() = SurveyItem(
         else -> "참여 신청"
     }, recruitmentId = id
 )
+
+fun participationCategorySelectedColor(category: String): Color =
+    when (if (category == "전체") category else participationPurpose(category)) {
+        "학술·연구" -> Color(0xFFE6EEFA)
+        "가게·서비스" -> Color(0xFFFFEEDD)
+        "지역·정책" -> Color(0xFFE0F1EB)
+        "기타" -> Color(0xFFF0E7F6)
+        else -> Color(0xFFE4EEDC)
+    }
+
+fun participationCategoryTextColor(category: String): Color =
+    when (if (category == "전체") category else participationPurpose(category)) {
+        "학술·연구" -> Color(0xFF31558A)
+        "가게·서비스" -> Color(0xFF8C4A1B)
+        "지역·정책" -> Color(0xFF276558)
+        "기타" -> Color(0xFF694883)
+        else -> Color(0xFF2F5539)
+    }

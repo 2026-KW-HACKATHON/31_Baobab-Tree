@@ -4,15 +4,13 @@ import androidx.compose.ui.graphics.Color
 
 val SurveyCategories = ParticipationPurposes
 
-fun surveyCategoryImage(category: String): Int = when (category.trim()) {
-    "생활·편의" -> R.drawable.search_card_01
-    "교육·학습", "학술·연구" -> R.drawable.search_card_02
-    "지역·사회", "지역·정책" -> R.drawable.search_card_03
-    "문화·스포츠" -> R.drawable.search_card_04
-    "경제·상권", "가게·서비스" -> R.drawable.search_card_05
-    "건강·의료" -> R.drawable.search_card_06
-    else -> R.drawable.search_card_01
+fun surveyCategoryImage(category: String): Int = when (participationPurpose(category)) {
+    "학술·연구" -> R.drawable.survey_category_research
+    "가게·서비스" -> R.drawable.survey_category_services
+    "지역·정책" -> R.drawable.survey_category_community
+    else -> R.drawable.survey_category_other
 }
+
 data class SurveyItem(
     val id: String = "preview",
     val category: String = "",

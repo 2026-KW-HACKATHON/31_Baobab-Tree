@@ -182,7 +182,7 @@ private fun HomeCategoryBar(
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(if (selected) HomeGreen else Color(0x0D545454))
+                        .background(if (selected) participationCategorySelectedColor(category.label) else Color(0x0D545454))
                         .then(
                             if (selected) Modifier.border(1.dp, Color.White, CircleShape)
                             else Modifier
@@ -193,7 +193,7 @@ private fun HomeCategoryBar(
                 ) {
                     Text(
                         text = category.label,
-                        color = if (selected) Color.White else HomeMuted,
+                        color = if (selected) participationCategoryTextColor(category.label) else HomeMuted,
                         fontFamily = HomeFont,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -247,7 +247,7 @@ fun SurveyFeedCard(
                     .padding(start = 7.dp)
                     .offset(y = 13  .dp)
                     .clip(badgeShape)
-                    .background(Color(0xFFF6E2E3))
+                    .background(participationCategorySelectedColor(survey.category))
                     .border(
                         width = 3.dp,
                         color = Color.White,
@@ -257,7 +257,7 @@ fun SurveyFeedCard(
                         horizontal = 11.dp,
                         vertical = 8.dp
                     ),
-                color = Color(0xFF800000),
+                color = participationCategoryTextColor(survey.category),
                 fontSize = 11.sp,
                 lineHeight = 13.sp,
                 fontWeight = FontWeight.Bold,

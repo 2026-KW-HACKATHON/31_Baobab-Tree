@@ -47,9 +47,9 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
             SurveyImage(survey, Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(24.dp)))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(color = Color(0xFFEAF0E4), shape = RoundedCornerShape(8.dp)) {
+                Surface(color = participationCategorySelectedColor(survey.category), shape = RoundedCornerShape(8.dp)) {
                     Text(participationPurpose(survey.category), Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = DetailGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        color = participationCategoryTextColor(survey.category), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(survey.title, fontSize = 25.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = DetailGreen)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

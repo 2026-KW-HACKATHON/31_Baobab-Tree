@@ -236,7 +236,7 @@ private fun SearchCategoryBar(
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(if (selected) SearchGreen else Color(0x0D545454))
+                        .background(if (selected) participationCategorySelectedColor(category.label) else Color(0x0D545454))
                         .border(
                             width = if (selected) 1.dp else 0.dp,
                             color = if (selected) Color.White else Color.Transparent,
@@ -248,7 +248,7 @@ private fun SearchCategoryBar(
                 ) {
                     Text(
                         text = category.label,
-                        color = if (selected) Color.White else SearchMuted,
+                        color = if (selected) participationCategoryTextColor(category.label) else SearchMuted,
                         fontFamily = SearchInterBold,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
