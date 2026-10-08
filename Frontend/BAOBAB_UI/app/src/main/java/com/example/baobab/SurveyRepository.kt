@@ -140,8 +140,15 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         gson.fromJson(request("surveys", surveyPayload(draft), token), SurveyDto::class.java).toItem()
     }
 
-    fun submitAnswers(survey: SurveyItem, answers: Map<Int, String>, token: String): ParticipationResult {
-        val payload = answerPayload(survey, answers)
+    fun createShareLink(surveyId: String, token: String): SurveyShareReward = parse {
+        require(surveyId.toIntOrNull()?.let { it > 0 } == true)
+        gson.fromJson(request("surveys/$surveyId/share", emptyMap<String, String>(), token), SurveyShareReward::class.java)
+            .also { surveyShareLink(surveyId, it.shareToken); require(it.rewardPoint == 10) }
+    }
+
+    fun submitAnswers(survey: SurveyItem, answers: Map<Int, String>, token: String, referralToken: String? = null): ParticipationResult {
+        val payload = answerPayload(survey, answers).toMutableMap()
+        referralToken?.let { payload["referralToken"] = it }
         return parse {
             val json = gson.fromJson(request("surveys/${survey.id}/responses", payload, token), com.google.gson.JsonObject::class.java)
             ParticipationResult(json.get("responseId").asInt, json.get("rewardPoint").asInt, json.get("point").asInt)

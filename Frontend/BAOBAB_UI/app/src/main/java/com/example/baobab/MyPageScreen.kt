@@ -32,8 +32,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
     onDelete: (SurveyItem) -> Unit = {}, onProfileUpdated: () -> Unit = {},
     onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}, onEdit: (SurveyItem) -> Unit = {},
     onOpenRecruitment: (Int) -> Unit = {}, onManageRecruitment: (Int) -> Unit = {},
-    onPointHistory: () -> Unit = onPointClick) {
-    val context = LocalContext.current
+    onPointHistory: () -> Unit = onPointClick, onShare: (SurveyItem) -> Unit = {}, shareBusy: Boolean = false) {
     val onOpenDrafts = LocalSurveyDraftList.current
     var editingProfile by remember(token) { mutableStateOf(false) }
     var confirmingPassword by remember(token) { mutableStateOf(false) }
@@ -101,7 +100,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
             }
             selected != null -> SurveyRequestContent(model.resultsLoading, model.resultsError, model.results,
                 { model.openResults(selected, token) }, Modifier.weight(1f).fillMaxWidth()) { results ->
-                ResultsContent(selected, results, onDelete, { shareSurvey(context, it) }, onEdit)
+                ResultsContent(selected, results, onDelete, onShare, onEdit)
             }
             else -> SurveyRequestContent(model.loading, model.error, model.profile,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
@@ -187,7 +186,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                     TextButton(onClick = { onEdit(survey) }) { Text("수정") }
-                                    TextButton(onClick = { shareSurvey(context, survey) }) { Text("공유") }
+                                    TextButton(onClick = { onShare(survey) }, enabled = !shareBusy) { Text("공유") }
                                     TextButton(onClick = { onDelete(survey) }) {
                                         Text("삭제", color = MaterialTheme.colorScheme.error)
                                     }

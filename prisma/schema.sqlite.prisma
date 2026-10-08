@@ -30,7 +30,6 @@ model User {
   coupons Coupon[]
   recruitments            Recruitment[]            @relation("CreatedRecruitments")
   recruitmentApplications RecruitmentApplication[]
-
   @@map("USER")
 }
 

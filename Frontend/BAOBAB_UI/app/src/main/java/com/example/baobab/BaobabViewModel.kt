@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 
 enum class BaobabScreen {
     LOGIN, START, HOME, SEARCH, DETAIL, PARTICIPATE, SURVEY_COMPLETE, RECRUITMENTS,
@@ -44,7 +45,7 @@ data class CompletedSurveyDraft(
     val settings: SurveySettingsDraft
 )
 
-class BaobabViewModel : ViewModel() {
+class BaobabViewModel(private val savedState: SavedStateHandle = SavedStateHandle()) : ViewModel() {
     private val backStack = mutableStateListOf(BaobabScreen.LOGIN)
     val currentScreen: BaobabScreen get() = backStack.last()
     val canGoBack: Boolean get() = backStack.size > 1
@@ -82,7 +83,19 @@ class BaobabViewModel : ViewModel() {
         navigate(BaobabScreen.RECRUITMENTS)
     }
 
-    fun openSurvey(survey: SurveyItem) {
+    fun referralFor(surveyId: String): String? =
+        if (savedState.get<String>("referralSurveyId") == surveyId) savedState["referralToken"] else null
+
+    fun clearReferral(surveyId: String) {
+        if (savedState.get<String>("referralSurveyId") == surveyId) {
+            savedState.remove<String>("referralSurveyId")
+            savedState.remove<String>("referralToken")
+        }
+    }
+
+    fun openSurvey(survey: SurveyItem, referralToken: String? = null) {
+        savedState["referralSurveyId"] = survey.id
+        savedState["referralToken"] = referralToken
         selectedSurvey = survey
         navigate(BaobabScreen.DETAIL)
     }

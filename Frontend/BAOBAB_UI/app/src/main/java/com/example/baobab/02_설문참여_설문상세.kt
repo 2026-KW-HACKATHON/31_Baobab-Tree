@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,15 +31,15 @@ private val DetailMuted = Color(0xFF697369)
 @Composable
 fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem = SampleSurveys.first(),
     onRelatedSurveyClick: (SurveyItem) -> Unit = {}, relatedSurveys: List<SurveyItem> = emptyList(),
-    canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}, onEdit: () -> Unit = {}) {
-    val context = LocalContext.current
+    canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}, onEdit: () -> Unit = {},
+    onShare: (SurveyItem) -> Unit = {}, shareBusy: Boolean = false) {
     val related = relatedSurveys.filter { participationPurpose(it.category) == participationPurpose(survey.category) && it.id != survey.id }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onBack) { Icon(Icons.Outlined.ChevronLeft, "뒤로가기", tint = DetailGreen) }
             Text("설문 상세", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { shareSurvey(context, survey) }) { Icon(Icons.Outlined.Share, "설문 공유", tint = DetailGreen) }
+            IconButton(onClick = { onShare(survey) }, enabled = !shareBusy) { Icon(Icons.Outlined.Share, "설문 공유", tint = DetailGreen) }
             if (canDelete) TextButton(onEdit) { Text("수정") }
             if (canDelete) TextButton(onDelete) { Text("삭제", color = MaterialTheme.colorScheme.error) }
         }
@@ -75,6 +74,21 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
                     HorizontalDivider(color = Color(0xFFE8ECE4))
                     DetailInfo("마감일", survey.deadline?.takeIf { it.isNotBlank() } ?: "별도 마감일 없음")
                     DetailInfo("문항 수", "${survey.questionCount ?: survey.questions.size}문항")
+                }
+            }
+            if (survey.status != "CLOSED") {
+                Surface(color = Color(0xFFEAF0E4), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("설문 공유하고 10P 받기", color = DetailGreen, fontSize = 17.sp,
+                            lineHeight = 25.sp, fontWeight = FontWeight.Bold)
+                        Text("내 링크로 다른 사람이 설문을 완료하면 1명당 10P가 적립돼요.",
+                            color = DetailMuted, fontSize = 14.sp, lineHeight = 22.sp)
+                        TextButton(onClick = { onShare(survey) }, enabled = !shareBusy) {
+                            Icon(Icons.Outlined.Share, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (shareBusy) "잠시만 기다려주세요" else "링크 공유하기")
+                        }
+                    }
                 }
             }
             if (related.isNotEmpty()) {

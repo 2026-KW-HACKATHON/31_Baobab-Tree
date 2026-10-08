@@ -292,9 +292,33 @@ class SurveyService {
     return { message: 'Question deleted' };
   }
 
-  async submitResponse(userId, surveyId, answers) {
+  async createShareLink(userId, surveyId) {
+    const referrerId = id(userId);
+    const targetSurveyId = id(surveyId);
+    const survey = await this.prisma.survey.findUnique({ where: { id: targetSurveyId } });
+    if (!survey) fail(404, 'Survey not found');
+    if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date()) ||
+        (survey.targetCount > 0 && survey.currentCount >= survey.targetCount)) fail(400, 'Survey is closed or full');
+    if (!await this.prisma.user.findUnique({ where: { id: referrerId } })) fail(401, 'User not found');
+    const shareToken = jwt.sign({ purpose: 'survey-referral', referrerId, surveyId: targetSurveyId }, JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '30d', audience: 'baobab-survey-referral' });
+    return { shareToken, rewardPoint: 10 };
+  }
+
+  referralOwner(shareToken, surveyId) {
+    if (typeof shareToken !== 'string' || shareToken.length > 2048) return null;
+    try {
+      const payload = jwt.verify(shareToken, JWT_SECRET,
+        { algorithms: ['HS256'], audience: 'baobab-survey-referral' });
+      if (payload.purpose !== 'survey-referral' || payload.surveyId !== id(surveyId)) return null;
+      return id(payload.referrerId);
+    } catch (_) { return null; }
+  }
+
+  async submitResponse(userId, surveyId, answers, referralToken) {
     const participantId = id(userId);
     const targetSurveyId = id(surveyId);
+    const referrerId = this.referralOwner(referralToken, targetSurveyId);
     if (!Array.isArray(answers)) fail(400, 'answers must be an array');
     return transaction(this.prisma, async tx => {
       const survey = await tx.survey.findUnique({ where: { id: targetSurveyId }, include: surveyInclude });
@@ -331,6 +355,17 @@ class SurveyService {
       if (survey.rewardPoint > 0) await tx.pointHistory.create({
         data: { userId: participantId, amount: survey.rewardPoint, description: `Survey reward: ${survey.title}` },
       });
+      // Response's unique (participant, survey) key and this same transaction prevent double rewards.
+      if (referrerId && referrerId !== participantId) {
+        const credited = await tx.user.updateMany({
+          where: { id: referrerId, point: { lte: 2147483647 - 10 } },
+          data: { point: { increment: 10 } },
+        });
+        if (credited.count) await tx.pointHistory.create({
+          data: { userId: referrerId, amount: 10,
+            description: `설문 공유 보상: ${survey.title} (응답 #${response.id})` },
+        });
+      }
       return { message: 'Response submitted', responseId: response.id, rewardPoint: survey.rewardPoint, point: user.point };
     });
   }

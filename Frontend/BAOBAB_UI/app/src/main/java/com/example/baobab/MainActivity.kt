@@ -66,8 +66,8 @@ class MainActivity : ComponentActivity() {
         }
 
         if (intent.action == Intent.ACTION_VIEW) {
-            sharedSurveyId(intent.dataString)?.let {
-                navigation.openSurvey(SurveyItem(id = it))
+            sharedSurvey(intent.dataString)?.let {
+                navigation.openSurvey(SurveyItem(id = it.id), it.referralToken)
             }
         }
     }
@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
         })[AccountViewModel::class.java]
         val participation = ViewModelProvider(this)[ParticipationViewModel::class.java]
         val myPage = ViewModelProvider(this)[MyPageViewModel::class.java]
-        if (savedInstanceState == null) {
+        if (savedInstanceState == null || viewModel.selectedSurvey == null) {
             openSharedSurvey(intent)
 
             if (isPaymentReturn(intent)) {
@@ -98,6 +98,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BAOBABTheme {
+                val onShare: (SurveyItem) -> Unit = { survey ->
+                    if (account.token == null) {
+                        Toast.makeText(this@MainActivity, "공유 포인트를 받으려면 로그인해주세요.", Toast.LENGTH_SHORT).show()
+                        viewModel.navigate(BaobabScreen.LOGIN)
+                    } else account.createShareLink(survey, { reward ->
+                        val link = surveyWebShareLink(survey.id, reward.shareToken, BuildConfig.SURVEY_API_BASE_URL)
+                        shareSurvey(this@MainActivity, survey, link)
+                        Toast.makeText(this@MainActivity, "링크를 받은 사람이 설문을 완료하면 ${reward.rewardPoint}P를 받아요.", Toast.LENGTH_LONG).show()
+                    }, { message -> Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show() })
+                }
                 LaunchedEffect(myPage.sessionExpired) {
                     if (myPage.sessionExpired) {
                         account.invalidateSession()
@@ -290,6 +300,8 @@ class MainActivity : ComponentActivity() {
                                 ) { survey ->
                                     key(survey.id) {
                                         SurveyDetailScreen(
+                                            onShare = onShare,
+                                            shareBusy = account.busy,
                                             onBack = { viewModel.goBack() },
                                             survey = survey,
                                             canDelete = account.token != null && myPage.profile?.id != null &&
@@ -329,7 +341,8 @@ class MainActivity : ComponentActivity() {
                                     survey, participation.answers, account.busy, account.error,
                                     onAnswer = { id, value -> participation.answers[id] = value },
                                     onSubmit = {
-                                        account.participate(survey, participation.answers) {
+                                        account.participate(survey, participation.answers, viewModel.referralFor(survey.id)) {
+                                            viewModel.clearReferral(survey.id)
                                             viewModel.navigate(BaobabScreen.SURVEY_COMPLETE)
                                             surveyData.loadSurveys(force = true)
                                             surveyData.loadDetail(survey.id)
@@ -556,7 +569,9 @@ class MainActivity : ComponentActivity() {
                         BaobabScreen.MY -> {
                             LocalNetworkPermissionGate {
                                 MyPageScreen(
-                                    myPage, account.token,
+                                    onShare = onShare,
+                                    shareBusy = account.busy,
+                                    model = myPage, token = account.token,
                                     onOpenRecruitment = { viewModel.openRecruitment(it) },
                                     onManageRecruitment = { viewModel.openRecruitment(it, page = "MANAGE") },
                                     onPointHistory = { viewModel.navigate(BaobabScreen.POINT_HISTORY) },

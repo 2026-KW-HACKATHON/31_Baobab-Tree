@@ -432,6 +432,35 @@ function createSurveyRouter(service = new SurveyService()) {
   // 설문 응답 / 결과
   // ─────────────────────────────
 
+  router.post('/surveys/:id/share', auth, handle(200, req =>
+    service.createShareLink(req.user.userId, req.params.id),
+  ));
+
+  router.get('/surveys/:id/share', async (req, res, next) => {
+    try {
+      const survey = await service.getSurveyDetail(req.params.id);
+      const referral = service.referralOwner(req.query.referral, survey.id) ? req.query.referral : null;
+      const query = referral ? '?referral=' + encodeURIComponent(referral) : '';
+      const appLink = 'baobab://surveys/' + survey.id + query;
+      const androidLink = 'intent://surveys/' + survey.id + query +
+        '#Intent;scheme=baobab;package=com.example.baobab;end';
+      const escape = value => String(value).replace(/[&<>"']/g, char =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+      res.set('Cache-Control', 'no-store');
+      res.set('Referrer-Policy', 'no-referrer');
+      res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+      res.type('html').send(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(survey.title)} · BAOBAB</title>
+        <style>body{margin:0;background:#fdf9f1;color:#26372b;font-family:sans-serif;padding:56px 24px}
+        main{max-width:480px;margin:auto}h1{line-height:1.5;overflow-wrap:anywhere}p{line-height:1.7;color:#697369}
+        a{display:block;background:#2f5539;color:white;text-align:center;text-decoration:none;border-radius:16px;padding:18px;margin-top:24px}
+        .secondary{background:#eaf0e4;color:#2f5539}</style></head><body><main><p>BAOBAB · 설문 참여</p>
+        <h1>${escape(survey.title)}</h1><p>BAOBAB 앱에서 설문에 참여해주세요.<br>앱이 설치되어 있어야 열 수 있어요.</p>
+        <a href="${escape(androidLink)}">Android 앱에서 참여하기</a>
+        <a class="secondary" href="${escape(appLink)}">앱으로 열기</a></main></body></html>`);
+    } catch (error) { next(error); }
+  });
+
   router.post(
     '/surveys/:id/responses',
     auth,
@@ -440,6 +469,7 @@ function createSurveyRouter(service = new SurveyService()) {
         req.user.userId,
         req.params.id,
         (req.body || {}).answers,
+        (req.body || {}).referralToken,
       ),
     ),
   );

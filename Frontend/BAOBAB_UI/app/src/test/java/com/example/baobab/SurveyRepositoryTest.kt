@@ -306,6 +306,24 @@ class SurveyRepositoryTest {
         assertEquals("Reason", json[1].asJsonObject.get("answer").asString)
     }
 
+    @Test fun shareLinkUsesAuthenticatedServerTokenAndSubmissionCarriesReferralOnlyWhenPresent() {
+        body = """{"shareToken":"a.b.c","rewardPoint":10}"""
+        assertEquals(SurveyShareReward("a.b.c", 10), repository.createShareLink("7", "sharer-token"))
+        assertEquals("/api/surveys/7/share", requestedPath)
+        assertEquals("POST", requestedMethod)
+        assertEquals("Bearer sharer-token", authorization)
+        body = surveyJson
+        val survey = repository.getSurvey("7")
+        body = """{"responseId":20,"rewardPoint":300,"point":750}"""
+        repository.submitAnswers(survey, mapOf(9 to "Yes"), "participant-token", "a.b.c")
+        val json = com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java)
+        assertEquals("a.b.c", json.get("referralToken").asString)
+        assertFalse(json.has("referrerId"))
+        assertEquals("Bearer participant-token", authorization)
+        repository.submitAnswers(survey, mapOf(9 to "Yes"), "participant-token")
+        assertFalse(com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java).has("referralToken"))
+    }
+
     private fun draft() = CompletedSurveyDraft(
         SurveyDraftStepOne("Travel", "Life", "", "", "2099. 01. 01."),
         listOf(SurveyQuestionSnapshot(SurveyQuestionType.MULTIPLE_CHOICE, "Bus?", true, 0, listOf("Yes", "No"))),

@@ -133,11 +133,16 @@ class AccountViewModel(
         runRequest({ repository.deleteSurvey(survey.id, credential) }, { success() })
     }
 
-    fun participate(survey: SurveyItem, answers: Map<Int, String>, success: () -> Unit) {
+    fun createShareLink(survey: SurveyItem, success: (SurveyShareReward) -> Unit, failure: (String) -> Unit) {
+        val credential = token ?: run { failure("공유 포인트를 받으려면 로그인해주세요."); return }
+        runRequest({ repository.createShareLink(survey.id, credential) }, success, failure)
+    }
+
+    fun participate(survey: SurveyItem, answers: Map<Int, String>, referralToken: String? = null, success: () -> Unit) {
         if (busy) return
         val credential = token ?: run { error = "설문 참여에는 로그인이 필요합니다."; return }
         val snapshot = answers.toMap()
-        runRequest({ repository.submitAnswers(survey, snapshot, credential) }, {
+        runRequest({ repository.submitAnswers(survey, snapshot, credential, referralToken) }, {
             point = it.point
             participationResult = it
             success()
