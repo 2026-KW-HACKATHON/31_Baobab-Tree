@@ -509,6 +509,18 @@ class MainActivity : ComponentActivity() {
                                         onBack = { viewModel.goBack() },
                                         onLogin = {
                                             viewModel.navigate(BaobabScreen.LOGIN)
+                                        },
+                                        onHome = {
+                                            viewModel.navigate(BaobabScreen.HOME)
+                                        },
+                                        onSearch = {
+                                            viewModel.openSearch("")
+                                        },
+                                        onMy = {
+                                            viewModel.navigate(BaobabScreen.MY)
+                                        },
+                                        onPointHistory = {
+                                            viewModel.navigate(BaobabScreen.POINT_HISTORY)
                                         }
                                     )
                                 }

@@ -107,11 +107,44 @@ fun HomeScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeHeader(onMyClick = onMyClick, onPointClick = onPointClick, currentPoint = currentPoint, loggedIn = loggedIn)
-            androidx.compose.material3.TextButton(
-                onClick = onRecruitmentClick,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFF1EEE7)),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("참여자 모집", color = Color(0xFF2F5539))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFE4EFDF))
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "설문",
+                        color = Color(0xFF2F5539),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onRecruitmentClick)
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "참여자 모집",
+                        color = Color(0xFF454545),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             HomeCategoryBar(
                 selectedCategory = selectedCategory,
