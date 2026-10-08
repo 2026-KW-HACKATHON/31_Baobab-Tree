@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/auth');
 
 const userSelect = {
+  regionVerifiedAt: true, verifiedRegionCode: true,
   id: true, email: true, loginId: true, name: true,
   ageGroup: true, region: true, memberType: true, memberDetail: true, point: true, createdAt: true,
 };
@@ -53,6 +54,10 @@ function surveyData(data, partial = false) {
     endDate: data.endDate !== undefined ? data.endDate : data.end_date,
   };
   const result = {};
+  if (data.requiresRegionVerification !== undefined) {
+    if (typeof data.requiresRegionVerification !== 'boolean') fail(400, 'requiresRegionVerification must be boolean');
+    result.requiresRegionVerification = data.requiresRegionVerification;
+  }
   if (!partial || data.title !== undefined) result.title = text(data.title, 'title');
   if (data.category !== undefined) result.category = data.category === null ? null : text(data.category, 'category');
   for (const field of ['rewardPoint', 'targetCount']) {
@@ -88,7 +93,7 @@ function surveyData(data, partial = false) {
 class SurveyService {
   constructor(prisma = getPrisma()) { this.prisma = prisma; }
 
-  async signup(data) {
+  async signup(data, regionVerification = null) {
     const email = text(data.email, 'email');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Invalid email');
     if (!['KW_STUDENT', 'LOCAL_GOVERNMENT', 'WOLGYE_RESIDENT', 'OTHER'].includes(data.memberType)) fail(400, 'Choose a member type');
@@ -102,7 +107,11 @@ class SurveyService {
     if (data.ageGroup !== undefined && data.ageGroup !== null) text(data.ageGroup, 'ageGroup');
     if (data.region !== undefined && data.region !== null) text(data.region, 'region');
     const user = await this.prisma.user.create({
-      data: { email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
+      data: {
+        regionVerifiedAt: regionVerification?.verifiedAt ?? null,
+        verifiedRegionCode: regionVerification?.code ?? null,
+        email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup,
+        region: regionVerification?.code === '1135056000' ? '월계1동' : data.region },
       select: userSelect,
     });
     return { message: 'Signed up', user };
@@ -125,6 +134,14 @@ class SurveyService {
     const user = await this.prisma.user.findUnique({ where: { id: id(userId) }, select: userSelect });
     if (!user) fail(404, 'User not found');
     return user;
+  }
+
+  async verifyUserRegion(userId) {
+    return this.prisma.user.update({
+      where: { id: id(userId) },
+      data: { regionVerifiedAt: new Date(), verifiedRegionCode: '1135056000', region: '월계1동' },
+      select: userSelect,
+    });
   }
 
   async verifyPassword(userId, password) {
@@ -321,6 +338,13 @@ class SurveyService {
     return transaction(this.prisma, async tx => {
       const survey = await tx.survey.findUnique({ where: { id: targetSurveyId }, include: surveyInclude });
       if (!survey) fail(404, 'Survey not found');
+      if (survey.requiresRegionVerification) {
+        const participant = await tx.user.findUnique({ where: { id: participantId },
+          select: { regionVerifiedAt: true, verifiedRegionCode: true } });
+        if (!participant?.regionVerifiedAt || participant.verifiedRegionCode !== '1135056000') {
+          fail(403, '월계1동 지역 인증이 필요한 설문입니다. 마이페이지에서 지역 인증을 완료해주세요.');
+        }
+      }
       if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date())) fail(400, 'Survey is closed');
       const existing = await tx.response.findUnique({ where: { userId_surveyId: { userId: participantId, surveyId: targetSurveyId } } });
       if (existing) fail(409, 'Already participated');

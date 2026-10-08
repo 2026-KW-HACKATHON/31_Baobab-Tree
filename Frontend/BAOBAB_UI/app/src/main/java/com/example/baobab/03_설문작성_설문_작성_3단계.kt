@@ -167,7 +167,8 @@ fun SurveyCreationStepThreeScreen(
                                 rewardPerPerson = rewardPerPerson,
                                 rewardRecipients = rewardRecipients,
                                 duration = selectedDuration,
-                                imageData = state.imageData
+                                imageData = state.imageData,
+                                requiresRegionVerification = state.requiresRegionVerification
                             )
                         )
                     },
@@ -191,7 +192,8 @@ data class SurveySettingsDraft(
     val rewardPerPerson: String,
     val rewardRecipients: String,
     val duration: String,
-    val imageData: String? = null
+    val imageData: String? = null,
+    val requiresRegionVerification: Boolean = false
 )
 
 @Composable
@@ -217,7 +219,7 @@ private fun RewardSettingsCard(
     onRewardRecipientsChange: (String) -> Unit
 ) {
     val points = (rewardPerPerson.filter(Char::isDigit).toLongOrNull() ?: 0L) *
-        (rewardRecipients.filter(Char::isDigit).toLongOrNull() ?: 0L)
+            (rewardRecipients.filter(Char::isDigit).toLongOrNull() ?: 0L)
 
     Column(
         modifier = Modifier

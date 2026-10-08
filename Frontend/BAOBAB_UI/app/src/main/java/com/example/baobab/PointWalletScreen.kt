@@ -64,6 +64,12 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
     var exchanging by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirming by rememberSaveable { mutableStateOf(false) }
     var selectedCouponId by rememberSaveable { mutableStateOf<String?>(null) }
+    val walletCoupons = coupons.filter { it.status != "USED" }
+    LaunchedEffect(coupons) {
+        if (coupons.any { it.id == selectedCouponId && it.status == "USED" }) {
+            selectedCouponId = null
+        }
+    }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
         Box(Modifier.fillMaxWidth().height(64.dp)) {
             IconButton(onBack, Modifier.align(Alignment.CenterStart).padding(start = 8.dp)) {
@@ -169,19 +175,19 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text("${coupons.size}장", color = WalletMuted)
+                    Text("${walletCoupons.size}장", color = WalletMuted)
                 }
 
                 if (!loggedIn) {
                     Text("로그인하면 보유 쿠폰을 확인할 수 있어요.")
-                } else if (!loading && error == null && coupons.isEmpty()) {
+                } else if (!loading && error == null && walletCoupons.isEmpty()) {
                     Text(
                         "보유한 쿠폰이 없습니다. 교환소에서 쿠폰을 교환해보세요.",
                         color = WalletMuted
                     )
                 }
 
-                coupons.forEach { coupon ->
+                walletCoupons.forEach { coupon ->
                     Surface(
                         color = Color.White,
                         shape = RoundedCornerShape(20.dp)

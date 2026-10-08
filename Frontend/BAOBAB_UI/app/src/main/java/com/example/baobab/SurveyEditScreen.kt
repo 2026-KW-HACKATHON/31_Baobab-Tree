@@ -24,6 +24,7 @@ fun surveyEditState(survey: SurveyItem) = SurveyCreationState().apply {
     audience = survey.audience.orEmpty(); deadline = survey.deadline.orEmpty()
     rewardPerPerson = survey.points.ifBlank { "0P" }; rewardRecipients = "${survey.targetCount ?: 0}명"
     selectedDuration = survey.duration.orEmpty(); imageData = survey.imageData
+    requiresRegionVerification = survey.requiresRegionVerification
     questions.clear()
     questions.addAll(survey.questions.map { q -> SurveyQuestionDraft(
         if (q.questionType == "single") SurveyQuestionType.MULTIPLE_CHOICE else SurveyQuestionType.SHORT_ANSWER,
@@ -32,7 +33,7 @@ fun surveyEditState(survey: SurveyItem) = SurveyCreationState().apply {
 
 @Composable
 fun SurveyEditScreen(survey: SurveyItem, state: SurveyCreationState, busy: Boolean, error: String?,
-    onBack: () -> Unit, onSave: (CompletedSurveyDraft, String) -> Unit) {
+                     onBack: () -> Unit, onSave: (CompletedSurveyDraft, String) -> Unit) {
     var step by rememberSaveable(survey.id) { mutableIntStateOf(1) }
     var status by rememberSaveable(survey.id) { mutableStateOf(survey.status) }
     val canEditQuestions = (survey.participantCount ?: 0) == 0
@@ -82,7 +83,8 @@ fun SurveyEditScreen(survey: SurveyItem, state: SurveyCreationState, busy: Boole
                     val draft = CompletedSurveyDraft(
                         SurveyDraftStepOne(state.title, state.category, state.introduction, state.audience, state.deadline),
                         state.questions.map { SurveyQuestionSnapshot(it.type, it.title, it.required, it.selectedOptionIndex, it.options.toList()) },
-                        SurveySettingsDraft(state.rewardPerPerson, state.rewardRecipients, state.selectedDuration, state.imageData))
+                        SurveySettingsDraft(state.rewardPerPerson, state.rewardRecipients, state.selectedDuration, state.imageData,
+                            requiresRegionVerification = state.requiresRegionVerification))
                     onSave(draft, status)
                 }, enabled = !busy && !imageLoading, modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp)) {
                     Text(if (busy) "저장 중…" else "설문 수정 완료")

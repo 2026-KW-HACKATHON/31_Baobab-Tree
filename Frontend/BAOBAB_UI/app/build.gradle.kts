@@ -58,6 +58,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.squareup.okhttp3:okhttp:5.3.0")
     implementation("com.google.code.gson:gson:2.11.0")

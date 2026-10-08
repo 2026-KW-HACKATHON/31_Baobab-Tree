@@ -97,7 +97,8 @@ private fun SurveyCreationState.savedDraft(): CompletedSurveyDraft {
             rewardPerPerson,
             rewardRecipients,
             selectedDuration,
-            imageData
+            imageData,
+            requiresRegionVerification
         )
     )
 }
@@ -115,6 +116,7 @@ private fun SurveyCreationState.restoreDraft(
     rewardRecipients = draft.settings.rewardRecipients
     selectedDuration = draft.settings.duration
     imageData = draft.settings.imageData
+    requiresRegionVerification = draft.settings.requiresRegionVerification
 
     questions.clear()
     questions.addAll(

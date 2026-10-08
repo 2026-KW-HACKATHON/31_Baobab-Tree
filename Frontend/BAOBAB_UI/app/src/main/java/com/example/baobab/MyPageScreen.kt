@@ -109,6 +109,16 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
                 LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item {
+                        LocationCheckSection(
+                            enabled = !model.savingProfile,
+                            onBusyChanged = {},
+                            verificationToken = token,
+                            initiallyVerified = user.verifiedRegionCode == "1135056000" && user.regionVerifiedAt != null,
+                            onSaved = { model.load(token) }
+                        )
+                    }
+
+                    item {
                         Surface(onClick = onPointClick, color = MyGreen, shape = RoundedCornerShape(24.dp)) {
                             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${user.name}님", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -138,7 +148,9 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                                 Text(if (type == "OTHER") "기타 · ${user.memberDetail.orEmpty()}" else MemberTypes[type].orEmpty(), color = MyGreen)
                             }
                             Text(user.email, color = MyMuted, fontSize = 14.sp)
-                            if (!user.region.isNullOrBlank()) Text(user.region, color = MyMuted, fontSize = 14.sp)
+                            val profileRegion = if (user.verifiedRegionCode == "1135056000" && user.regionVerifiedAt != null)
+                                "월계1동" else user.region
+                            if (!profileRegion.isNullOrBlank()) Text("지역 · $profileRegion", color = MyMuted, fontSize = 14.sp)
                             if (!user.ageGroup.isNullOrBlank()) Text(user.ageGroup, color = MyMuted, fontSize = 14.sp)
                         }
                     }

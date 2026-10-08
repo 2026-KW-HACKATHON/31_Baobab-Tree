@@ -147,8 +147,105 @@ async function kakaoRequest(action, body) {
   return result;
 }
 
+// 행정동 경계: 2026-07-01, vuski/admdongkor (CC BY 4.0).
+// 원자료: 통계청 SGIS, 공공누리 제1유형. 월계1동만 추출, WGS84.
+// https://github.com/vuski/admdongkor/tree/master/ver20260701
+const WOLGYE1_POLYGONS = [[[[127.06800697390771,37.61556823410261],[127.06800857238747,37.61553675426198],[127.06801197862414,37.61543761906754],[127.06774837079908,37.615221458271755],[127.06605194151736,37.61430486632415],[127.06594372381518,37.614281944675994],[127.06486632553198,37.6142220386233],[127.0628925772738,37.61434391558401],[127.06274332272696,37.61431406900919],[127.06242197958605,37.614285837610005],[127.06220997009201,37.614332371748624],[127.06201426203482,37.614375585975765],[127.06171702829765,37.614519571489005],[127.06151570909817,37.61461709696164],[127.06146171720876,37.614646189953724],[127.06123067319538,37.614771316237366],[127.06091110833297,37.61494721882659],[127.0606059962732,37.615651383411425],[127.05690909367502,37.61811524061525],[127.05420819236393,37.62017465517392],[127.05396214394193,37.62038045700041],[127.05384471611694,37.62047877302362],[127.0537318603156,37.62057519086872],[127.05335326119129,37.62090150859793],[127.05272211005695,37.62152540572227],[127.05216973796297,37.62209468058839],[127.05110540681335,37.623245479284904],[127.04998624978273,37.62443094627259],[127.05904280171167,37.6301999552195],[127.05908544459702,37.63005477352099],[127.05914108099465,37.629870206730814],[127.05915800207111,37.629814427437644],[127.05921781493996,37.62964222907151],[127.0593126102602,37.62937060382112],[127.05962539990419,37.62857746570442],[127.0599118324496,37.627930696124416],[127.05994345429558,37.627859763213515],[127.05997213928985,37.627796792596904],[127.06016656001324,37.627372814945495],[127.0607376442188,37.62628541193599],[127.06165558751466,37.62432506562809],[127.06205729121993,37.62340381846259],[127.06240635770386,37.623356657403306],[127.06430279482919,37.61903385630001],[127.06508235969169,37.617234895558326],[127.06507926548858,37.617163056206394],[127.06512997331086,37.616968327864235],[127.06516733005691,37.61687720463908],[127.06545605006346,37.616224282260525],[127.06575863401643,37.615544269790036],[127.06586598927537,37.61530324925835],[127.06595954637508,37.61509321108571],[127.06800697390771,37.61556823410261]]]];
+
+function insideRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, ay] = ring[i];
+    const [bx, by] = ring[j];
+    if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+  }
+  return inside;
+}
+
+function boundaryDistanceMeters(longitude, latitude, polygons) {
+  const mx = 6371000 * Math.PI / 180 * Math.cos(latitude * Math.PI / 180);
+  const my = 6371000 * Math.PI / 180;
+  let minimum = Infinity;
+  for (const polygon of polygons) for (const ring of polygon) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const ax = (ring[j][0] - longitude) * mx;
+      const ay = (ring[j][1] - latitude) * my;
+      const bx = (ring[i][0] - longitude) * mx;
+      const by = (ring[i][1] - latitude) * my;
+      const dx = bx - ax, dy = by - ay;
+      const lengthSquared = dx * dx + dy * dy;
+      const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
+      minimum = Math.min(minimum, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+  }
+  return minimum;
+}
+
+function locationError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+async function checkWolgyeLocation(body) {
+  const { latitude, longitude, accuracyMeters, measuredAtMillis } = body || {};
+  if (
+    typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+  ) throw locationError(400, '올바른 위도·경도를 보내주세요.');
+
+  if (typeof accuracyMeters !== 'number' || !Number.isFinite(accuracyMeters) || accuracyMeters <= 0 || accuracyMeters > 100) {
+    throw locationError(400, '위치 오차가 큽니다. 창가나 실외에서 다시 시도해주세요.');
+  }
+  const now = Date.now();
+  if (!Number.isSafeInteger(measuredAtMillis) || measuredAtMillis < now - 120000 || measuredAtMillis > now + 30000) {
+    throw locationError(400, '최근에 확인한 위치가 필요합니다. 현재 위치를 다시 확인해주세요.');
+  }
+  const eligible = WOLGYE1_POLYGONS.some(polygon =>
+    insideRing(longitude, latitude, polygon[0]) &&
+    !polygon.slice(1).some(hole => insideRing(longitude, latitude, hole))
+  );
+  if (boundaryDistanceMeters(longitude, latitude, WOLGYE1_POLYGONS) <= accuracyMeters) {
+    throw locationError(422, '현재 위치가 월계1동 경계에 가깝습니다. 경계에서 떨어진 곳에서 다시 확인해주세요.');
+  }
+  return {
+    eligible,
+    region: eligible
+      ? { province: '서울특별시', city: '노원구', district: '월계1동', code: '1135056000' }
+      : { province: '', city: '', district: '월계1동 밖', code: '' },
+    message: eligible
+      ? '현재 위치가 월계1동으로 확인되었습니다.'
+      : '현재 위치가 월계1동 밖입니다. 다음에 인증하고 회원가입을 진행할 수 있습니다.'
+  };
+}
+
 function createSurveyRouter(service = new SurveyService()) {
   const router = express.Router();
+  // 회원가입 전에도 조회합니다. 제한은 서버 인스턴스별로 적용됩니다.
+  const attempts = new Map();
+  router.post('/location/check', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const now = Date.now();
+    for (const [key, entry] of attempts) if (now >= entry.expiresAt) attempts.delete(key);
+    const key = req.ip || 'unknown';
+    const entry = attempts.get(key) || { count: 0, expiresAt: now + 60000 };
+    if (entry.count >= 10 || (!attempts.has(key) && attempts.size >= 1000)) {
+      res.set('Retry-After', '60');
+      return res.status(429).json({ error: '요청이 많습니다. 1분 후 다시 시도해주세요.' });
+    }
+    entry.count++;
+    attempts.set(key, entry);
+    try {
+      const result = await checkWolgyeLocation(req.body);
+      return res.json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({
+        error: error.status ? error.message : '지역 확인 중 오류가 발생했습니다.'
+      });
+    }
+  });
+
+
   const prisma = service.prisma;
   router.use('/coupons', createCouponRedemptionRouter(prisma));
   const recruitmentService = new RecruitmentService(prisma);
@@ -303,7 +400,16 @@ function createSurveyRouter(service = new SurveyService()) {
 
   router.post(
     '/auth/signup',
-    handle(201, req => service.signup(req.body || {})),
+    handle(201, async req => {
+      const data = req.body || {};
+      let verification = null;
+      if (data.location != null) {
+        const checked = await checkWolgyeLocation(data.location);
+        if (!checked.eligible) throw locationError(403, '월계1동 안에서 다시 확인하거나 지역 인증을 다음에 진행해주세요.');
+        verification = { verifiedAt: new Date(), code: checked.region.code };
+      }
+      return service.signup(data, verification);
+    }),
   );
 
   router.post(
@@ -330,6 +436,16 @@ function createSurveyRouter(service = new SurveyService()) {
     '/users/me',
     auth,
     handle(200, req => service.getUserMe(req.user.userId)),
+  );
+
+  router.post(
+    '/users/me/region-verification',
+    auth,
+    handle(200, async req => {
+      const checked = await checkWolgyeLocation(req.body);
+      if (!checked.eligible) throw locationError(403, '현재 위치가 월계1동 밖입니다. 월계1동에서 다시 인증해주세요.');
+      return service.verifyUserRegion(req.user.userId);
+    }),
   );
 
   router.patch(

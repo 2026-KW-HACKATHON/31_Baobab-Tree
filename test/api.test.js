@@ -396,12 +396,15 @@ test('schema-backed API integration', async t => {
     const url = `/coupons/${coupon.id}/redeem`;
     async function openPage() {
       const html = await (await fetch(base + url)).text();
-      const button = { disabled: /id="redeem" disabled/.test(html), addEventListener() {} };
+      assert.ok(!html.includes('<button'));
       const status = {};
       let requests = 0;
       const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
       await require('node:vm').runInNewContext(script + '\nredemptionRequest', {
-        document: { getElementById: id => id === 'redeem' ? button : status },
+        document: { getElementById: id => {
+          assert.equal(id, 'status');
+          return status;
+        } },
         window: { location: { pathname: '/api' + url } },
         fetch: (pathname, options) => {
           requests++;
@@ -409,12 +412,11 @@ test('schema-backed API integration', async t => {
           return fetch(base.replace(/\/api$/, '') + pathname, options);
         },
       });
-      return { requests, button, status };
+      return { requests, status };
     }
     const first = await openPage();
     assert.equal(first.requests, 1);
     assert.equal(first.status.textContent, '쿠폰 사용이 완료됐습니다.');
-    assert.equal(first.button.disabled, true);
     const used = await prisma.coupon.findUnique({ where: { id: coupon.id } });
     assert.equal(used.status, 'USED');
     assert.ok(used.usedAt);

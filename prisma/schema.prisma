@@ -20,6 +20,8 @@ model User {
   ageGroup       String?        @map("age_group")
   memberType     String?        @map("member_type")
   memberDetail   String?        @map("member_detail")
+  regionVerifiedAt DateTime? @map("region_verified_at")
+  verifiedRegionCode String? @map("verified_region_code")
   region         String?
   point          Int            @default(0)
   createdAt      DateTime       @default(now()) @map("created_at")
@@ -43,6 +45,7 @@ model Survey {
   audience     String?
   duration     String?
   imageData    String?
+  requiresRegionVerification Boolean @default(false) @map("requires_region_verification")
   fundedReward Int       @default(0)
   rewardPoint  Int        @default(0) @map("reward_point")
   targetCount  Int        @default(0) @map("target_count")

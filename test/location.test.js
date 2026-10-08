@@ -1,0 +1,42 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { createApp } = require('../src/app');
+test('location check works without Kakao or database queries', async t => {
+  const app = createApp({prisma:{}});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const url=`http://127.0.0.1:${server.address().port}/api/location/check`;
+  const send=(latitude,longitude,accuracyMeters=5)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude,longitude,accuracyMeters,measuredAtMillis:Date.now()})});
+  let response=await send(37.619,127.058);
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal((await response.json()).eligible,true);
+  response=await send(37.421998,-122.084);
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).eligible,false);
+  response=await send(37.619,127.058,101);
+  assert.equal(response.status,400);
+  response=await send(37.61556823410261,127.06800697390771);
+  assert.equal(response.status,422);
+});
+
+test('region storage checks location server-side and requires login for profile verification', async t => {
+  let signupVerification, savedUser;
+  const service={prisma:{},async signup(body,verification){signupVerification=verification;return {message:'Signed up'}},async verifyUserRegion(id){savedUser=id;return {id,verifiedRegionCode:'1135056000'}}};
+  const server=createApp(service).listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base=`http://127.0.0.1:${server.address().port}/api/`;
+  const location={latitude:37.619,longitude:127.058,accuracyMeters:5,measuredAtMillis:Date.now()};
+  const post=(path,body,token)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)});
+  assert.equal((await post('auth/signup',{regionVerifiedAt:'fake',verifiedRegionCode:'1135056000'})).status,201);
+  assert.equal(signupVerification,null);
+  assert.equal((await post('auth/signup',{location})).status,201);
+  assert.equal(signupVerification.code,'1135056000');
+  assert.equal((await post('auth/signup',{location:{...location,latitude:37.421998,longitude:-122.084}})).status,403);
+  assert.equal((await post('users/me/region-verification',location)).status,401);
+  const token=require('jsonwebtoken').sign({userId:42},require('../src/config/auth').JWT_SECRET);
+  assert.equal((await post('users/me/region-verification',location,token)).status,200);
+  assert.equal(savedUser,42);
+});
