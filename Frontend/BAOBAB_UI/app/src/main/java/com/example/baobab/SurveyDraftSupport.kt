@@ -3,6 +3,8 @@ package com.example.baobab
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -538,12 +540,8 @@ fun SurveyDraftSupport(
                                         Text("이어서 작성")
                                     }
 
-                                    TextButton(
-                                        enabled = !submitting,
-                                        onClick = { deleting = saved }
-                                    ) {
-                                        Text("삭제")
-                                    }
+                                    BaobabActionButton(BaobabActionIcons.Delete, "임시저장 설문 삭제",
+                                        { deleting = saved }, enabled = !submitting, destructive = true)
                                 }
 
                                 androidx.compose.material3.HorizontalDivider()
@@ -579,6 +577,7 @@ fun SurveyDraftSupport(
                 if (!working) deleting = null
             },
             title = { Text("임시저장 설문 삭제") },
+            icon = { Icon(BaobabActionIcons.Delete, null, tint = MaterialTheme.colorScheme.error) },
             text = {
                 Text(
                     saved.draft.basicInfo.title.ifBlank {

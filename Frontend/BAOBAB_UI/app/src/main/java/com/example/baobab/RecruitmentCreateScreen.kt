@@ -231,7 +231,8 @@ fun RecruitmentCreateScreen(
                             TextButton(onClick = {
                                 activeDraftId = saved.id; restore(saved.draft); showDraftList = false
                             }, enabled = !busy) { Text("이어 작성", color = green) }
-                            TextButton(onClick = { deletingDraft = saved }, enabled = !busy) { Text("삭제") }
+                            BaobabActionButton(BaobabActionIcons.Delete, "임시저장 모집 삭제",
+                                { deletingDraft = saved }, enabled = !busy, destructive = true)
                         }
                     }
                     HorizontalDivider(color = Color(0xFFD9E0D5))
@@ -246,6 +247,7 @@ fun RecruitmentCreateScreen(
     deletingDraft?.let { saved ->
         AlertDialog(onDismissRequest = { if (!busy) deletingDraft = null },
             title = { Text("임시저장 모집 삭제") },
+            icon = { Icon(BaobabActionIcons.Delete, null, tint = MaterialTheme.colorScheme.error) },
             text = { Text("${saved.draft.title.ifBlank { "제목 없는 모집" }}\n이 저장본을 삭제하시겠어요?") },
             confirmButton = { TextButton(onClick = {
                 val savedOwner = owner

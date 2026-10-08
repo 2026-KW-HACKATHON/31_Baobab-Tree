@@ -12,6 +12,7 @@ fun SurveyDeleteDialog(survey: SurveyItem, deleting: Boolean, error: String?,
     AlertDialog(
         onDismissRequest = { if (!deleting) onDismiss() },
         title = { Text("설문을 삭제할까요?") },
+        icon = { Icon(BaobabActionIcons.Delete, null, tint = MaterialTheme.colorScheme.error) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(survey.title)

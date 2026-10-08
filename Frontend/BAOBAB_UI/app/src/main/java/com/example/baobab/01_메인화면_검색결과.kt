@@ -294,7 +294,7 @@ private fun SearchFloatingActions(
                 .clickable(onClick = onCreateSurveyClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Edit, contentDescription = "참여 모집하기",
+            Icon(BaobabActionIcons.Edit, contentDescription = "참여 모집하기",
                 tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }

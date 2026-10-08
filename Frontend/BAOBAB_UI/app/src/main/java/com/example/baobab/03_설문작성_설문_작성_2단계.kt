@@ -52,9 +52,8 @@ fun SurveyCreationStepTwoScreen(onBackClick: () -> Unit = {},
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("문항 ${index + 1}", color = Color(0xFF2F5539), fontWeight = FontWeight.Bold)
-                                IconButton(onClick = { questions.remove(question) }, enabled = questions.size > 1) {
-                                    Icon(Icons.Outlined.DeleteOutline, "문항 ${index + 1} 삭제")
-                                }
+                                BaobabActionButton(BaobabActionIcons.Delete, "문항 ${index + 1} 삭제",
+                                    { questions.remove(question) }, enabled = questions.size > 1, destructive = true)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf(SurveyQuestionType.MULTIPLE_CHOICE to "객관식", SurveyQuestionType.SHORT_ANSWER to "주관식")
@@ -76,9 +75,8 @@ fun SurveyCreationStepTwoScreen(onBackClick: () -> Unit = {},
                                         OutlinedTextField(option, onValueChange = { question.options[optionIndex] = it },
                                             placeholder = { Text("선택지 입력") }, singleLine = true,
                                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp))
-                                        IconButton(onClick = { question.options.removeAt(optionIndex) }, enabled = question.options.size > 2) {
-                                            Icon(Icons.Outlined.Close, "선택지 ${optionIndex + 1} 삭제")
-                                        }
+                                        BaobabActionButton(BaobabActionIcons.Delete, "선택지 ${optionIndex + 1} 삭제",
+                                            { question.options.removeAt(optionIndex) }, enabled = question.options.size > 2, destructive = true)
                                     }
                                 }
                                 TextButton(onClick = { question.options.add("") }) {
