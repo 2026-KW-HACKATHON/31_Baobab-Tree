@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -21,7 +22,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Locale
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 
 @Composable
 fun LocationCheckSection(
@@ -29,7 +31,8 @@ fun LocationCheckSection(
     onBusyChanged: (Boolean) -> Unit,
     onVerified: (DeviceCoordinates?) -> Unit = {},
     verificationToken: String? = null,
-    onSaved: () -> Unit = {}
+    onSaved: () -> Unit = {},
+    initiallyVerified: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -45,6 +48,7 @@ fun LocationCheckSection(
     var error by remember { mutableStateOf<String?>(null) }
     var skipped by remember { mutableStateOf(false) }
     var permissionDenied by remember { mutableStateOf(false) }
+    var requestingPermission by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) { onDispose { currentBusyChanged(false) } }
 
@@ -90,12 +94,15 @@ fun LocationCheckSection(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        requestingPermission = false
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) readLocation()
         else {
             permissionDenied = true
             error = "정확한 위치 권한이 필요합니다. 권한을 허용하거나 다음에 진행해주세요."
         }
     }
+
+    val verified = initiallyVerified || result?.eligible == true
 
     Surface(
         modifier = Modifier.fillMaxWidth(), color = Color.White,
@@ -105,30 +112,59 @@ fun LocationCheckSection(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("월계1동 지역 인증", fontWeight = FontWeight.Bold, color = Color(0xFF2F5539))
             Text(if (verificationToken == null) "위치 인증은 선택 사항입니다. 다음에 진행해도 가입할 수 있습니다." else "현재 위치를 확인하고 계정에 지역 인증을 저장합니다.")
-            result?.let { checked ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
-                    if (checked.eligible) "월계1동 위치 확인 완료" else "월계1동 밖에 있습니다",
+                    if (verified) "월계1동 위치 확인 완료" else "월계1동 위치 확인",
+                    modifier = Modifier.weight(1f),
                     fontWeight = FontWeight.Bold,
-                    color = if (checked.eligible) Color(0xFF2F5539) else MaterialTheme.colorScheme.error
+                    color = Color(0xFF2F5539)
                 )
-                Text(listOf(checked.region.province, checked.region.city, checked.region.district).joinToString(" "))
-                Text(checked.message)
-                Text(if (saved) "계정에 지역 인증을 저장했습니다." else if (checked.eligible) "가입하기를 누르면 서버가 위치를 다시 확인하고 저장합니다. 2분이 지나면 다시 확인해주세요." else "지역 인증 없이 가입할 수 있습니다.")
+                if (busy || requestingPermission) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF2F5539)
+                    )
+                } else if (verified) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "위치 인증 성공",
+                        tint = Color(0xFF2F5539),
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    Button(
+                        onClick = {
+                            error = null
+                            permissionDenied = false
+                            requestingPermission = true
+                            permissionLauncher.launch(arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            ))
+                        },
+                        enabled = enabled && !busy && !requestingPermission,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2F5539), contentColor = Color.White
+                        )
+                    ) {
+                        Text("확인")
+                    }
+                }
             }
-            if (skipped) Text(if (verificationToken == null) "지역 인증 없이 가입을 계속 진행해주세요." else "지역 인증을 다음에 진행합니다.")
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Button(onClick = {
-                permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            }, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F5539), contentColor = Color.White)) {
-                Text(if (busy) progressText else "현재 위치 확인")
-            }
+            val failureMessage = error ?: result?.takeIf { !it.eligible }?.message
+            failureMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (permissionDenied) TextButton(onClick = {
                 context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-            }, enabled = enabled && !busy) { Text("앱 설정에서 위치 권한 허용") }
-            TextButton(onClick = { skipped = true; saved = false; currentVerified(null); result = null; coordinates = null; error = null; permissionDenied = false },
-                enabled = enabled && !busy) { Text("다음에 하기") }
+            }, enabled = enabled && !busy && !requestingPermission) { Text("앱 설정에서 위치 권한 허용") }
+            if (!verified) TextButton(onClick = { skipped = true; saved = false; currentVerified(null); result = null; coordinates = null; error = null; permissionDenied = false },
+                enabled = enabled && !busy && !requestingPermission) { Text("다음에 하기") }
         }
     }
 }

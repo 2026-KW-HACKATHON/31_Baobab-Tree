@@ -110,20 +110,6 @@ fun SurveyCreationStepThreeScreen(
                     )
             ) {
                 error?.let { Text(it, color = Color.Red) }
-                androidx.compose.material3.Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("월계1동 지역 인증 필요", color = StepThreeGreen, fontWeight = FontWeight.Bold)
-                            Text("켜면 지역 인증을 완료한 계정만 참여할 수 있어요.", fontSize = 13.sp)
-                        }
-                        androidx.compose.material3.Switch(
-                            checked = state.requiresRegionVerification,
-                            onCheckedChange = { state.requiresRegionVerification = it },
-                            enabled = !submitting
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
                 SectionLabel(number = 1, text = "리워드 지급")
                 Spacer(modifier = Modifier.height(14.dp))
                 RewardSettingsCard(

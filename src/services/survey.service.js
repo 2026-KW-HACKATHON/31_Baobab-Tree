@@ -110,7 +110,8 @@ class SurveyService {
       data: {
         regionVerifiedAt: regionVerification?.verifiedAt ?? null,
         verifiedRegionCode: regionVerification?.code ?? null,
-        email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
+        email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup,
+        region: regionVerification?.code === '1135056000' ? '월계1동' : data.region },
       select: userSelect,
     });
     return { message: 'Signed up', user };
@@ -138,7 +139,7 @@ class SurveyService {
   async verifyUserRegion(userId) {
     return this.prisma.user.update({
       where: { id: id(userId) },
-      data: { regionVerifiedAt: new Date(), verifiedRegionCode: '1135056000' },
+      data: { regionVerifiedAt: new Date(), verifiedRegionCode: '1135056000', region: '월계1동' },
       select: userSelect,
     });
   }

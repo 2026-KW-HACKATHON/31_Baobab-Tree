@@ -83,7 +83,8 @@ fun SurveyEditScreen(survey: SurveyItem, state: SurveyCreationState, busy: Boole
                     val draft = CompletedSurveyDraft(
                         SurveyDraftStepOne(state.title, state.category, state.introduction, state.audience, state.deadline),
                         state.questions.map { SurveyQuestionSnapshot(it.type, it.title, it.required, it.selectedOptionIndex, it.options.toList()) },
-                        SurveySettingsDraft(state.rewardPerPerson, state.rewardRecipients, state.selectedDuration, state.imageData))
+                        SurveySettingsDraft(state.rewardPerPerson, state.rewardRecipients, state.selectedDuration, state.imageData,
+                            requiresRegionVerification = state.requiresRegionVerification))
                     onSave(draft, status)
                 }, enabled = !busy && !imageLoading, modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp)) {
                     Text(if (busy) "저장 중…" else "설문 수정 완료")

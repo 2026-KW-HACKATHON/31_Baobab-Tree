@@ -119,7 +119,31 @@ fun SurveyCreationStepOneScreen(
                     multiline = true
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                AudienceField(audience, { audience = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                AudienceField(audience, {
+                    audience = it
+                    if (it != "월계1동 주민") state.requiresRegionVerification = false
+                }, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                if (audience == "월계1동 주민") {
+                    Spacer(Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                            .background(Color.White, RoundedCornerShape(10.dp))
+                            .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("지역 인증 필요", color = SurveyFormGreen, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            listOf(true to "O · 필요", false to "X · 필요 없음").forEach { (required, label) ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = state.requiresRegionVerification == required,
+                                    onClick = { state.requiresRegionVerification = required },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(24.dp))
                 SurveyDeadlineSection(
                     value = deadline,
