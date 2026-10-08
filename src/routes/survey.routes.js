@@ -400,7 +400,16 @@ function createSurveyRouter(service = new SurveyService()) {
 
   router.post(
     '/auth/signup',
-    handle(201, req => service.signup(req.body || {})),
+    handle(201, async req => {
+      const data = req.body || {};
+      let verification = null;
+      if (data.location != null) {
+        const checked = await checkWolgyeLocation(data.location);
+        if (!checked.eligible) throw locationError(403, '월계1동 안에서 다시 확인하거나 지역 인증을 다음에 진행해주세요.');
+        verification = { verifiedAt: new Date(), code: checked.region.code };
+      }
+      return service.signup(data, verification);
+    }),
   );
 
   router.post(
@@ -427,6 +436,16 @@ function createSurveyRouter(service = new SurveyService()) {
     '/users/me',
     auth,
     handle(200, req => service.getUserMe(req.user.userId)),
+  );
+
+  router.post(
+    '/users/me/region-verification',
+    auth,
+    handle(200, async req => {
+      const checked = await checkWolgyeLocation(req.body);
+      if (!checked.eligible) throw locationError(403, '현재 위치가 월계1동 밖입니다. 월계1동에서 다시 인증해주세요.');
+      return service.verifyUserRegion(req.user.userId);
+    }),
   );
 
   router.patch(

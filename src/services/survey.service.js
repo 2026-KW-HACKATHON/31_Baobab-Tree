@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../config/auth');
 
 const userSelect = {
+  regionVerifiedAt: true, verifiedRegionCode: true,
   id: true, email: true, loginId: true, name: true,
   ageGroup: true, region: true, memberType: true, memberDetail: true, point: true, createdAt: true,
 };
@@ -88,7 +89,7 @@ function surveyData(data, partial = false) {
 class SurveyService {
   constructor(prisma = getPrisma()) { this.prisma = prisma; }
 
-  async signup(data) {
+  async signup(data, regionVerification = null) {
     const email = text(data.email, 'email');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Invalid email');
     if (!['KW_STUDENT', 'LOCAL_GOVERNMENT', 'WOLGYE_RESIDENT', 'OTHER'].includes(data.memberType)) fail(400, 'Choose a member type');
@@ -102,7 +103,10 @@ class SurveyService {
     if (data.ageGroup !== undefined && data.ageGroup !== null) text(data.ageGroup, 'ageGroup');
     if (data.region !== undefined && data.region !== null) text(data.region, 'region');
     const user = await this.prisma.user.create({
-      data: { email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
+      data: {
+        regionVerifiedAt: regionVerification?.verifiedAt ?? null,
+        verifiedRegionCode: regionVerification?.code ?? null,
+        email, loginId, name, memberType, memberDetail, password: await bcrypt.hash(password, 10), ageGroup: data.ageGroup, region: data.region },
       select: userSelect,
     });
     return { message: 'Signed up', user };
@@ -125,6 +129,14 @@ class SurveyService {
     const user = await this.prisma.user.findUnique({ where: { id: id(userId) }, select: userSelect });
     if (!user) fail(404, 'User not found');
     return user;
+  }
+
+  async verifyUserRegion(userId) {
+    return this.prisma.user.update({
+      where: { id: id(userId) },
+      data: { regionVerifiedAt: new Date(), verifiedRegionCode: '1135056000' },
+      select: userSelect,
+    });
   }
 
   async verifyPassword(userId, password) {

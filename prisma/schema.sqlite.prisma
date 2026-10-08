@@ -19,6 +19,8 @@ model User {
   ageGroup       String?        @map("age_group")
   memberType     String?        @map("member_type")
   memberDetail   String?        @map("member_detail")
+  regionVerifiedAt DateTime? @map("region_verified_at")
+  verifiedRegionCode String? @map("verified_region_code")
   region         String?
   point          Int            @default(0)
   createdAt      DateTime       @default(now()) @map("created_at")
