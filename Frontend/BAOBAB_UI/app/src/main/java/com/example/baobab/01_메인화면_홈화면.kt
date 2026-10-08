@@ -65,15 +65,7 @@ private data class HomeCategory(
     val label: String
 )
 
-private val HomeCategories = listOf(
-    HomeCategory("전체"),
-    HomeCategory("생활·편의"),
-    HomeCategory("지역·사회"),
-    HomeCategory("교육·학습"),
-    HomeCategory("문화·스포츠"),
-    HomeCategory("경제·상권"),
-    HomeCategory("건강·의료")
-)
+private val HomeCategories = (listOf("전체") + ParticipationPurposes).map { HomeCategory(it) }
 
 @Composable
 fun HomeScreen(
@@ -89,14 +81,13 @@ fun HomeScreen(
     error: String? = null,
     onRetry: () -> Unit = {},
     currentPoint: Int? = null,
-    loggedIn: Boolean = false,
-    onRecruitmentClick: () -> Unit = {}
+    loggedIn: Boolean = false
 ) {
     var selectedCategory by rememberSaveable { mutableStateOf("전체") }
     val visibleSurveys = if (selectedCategory == "전체") {
         surveys
     } else {
-        surveys.filter { it.category == selectedCategory }
+        surveys.filter { participationPurpose(it.category) == selectedCategory }
     }
 
     Box(
@@ -107,45 +98,6 @@ fun HomeScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeHeader(onMyClick = onMyClick, onPointClick = onPointClick, currentPoint = currentPoint, loggedIn = loggedIn)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFF1EEE7)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFE4EFDF))
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "설문",
-                        color = Color(0xFF2F5539),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(onClick = onRecruitmentClick)
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "참여자 모집",
-                        color = Color(0xFF454545),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
             HomeCategoryBar(
                 selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it }
@@ -162,7 +114,7 @@ fun HomeScreen(
                         }
                     }
                     if (!loading && visibleSurveys.isEmpty() && error == null) item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text("아직 등록된 설문이 없어요. 아래로 당겨 새로고침할 수 있어요.", Modifier.padding(24.dp))
+                        Text("아직 등록된 참여 모집이 없어요. 아래로 당겨 새로고침할 수 있어요.", Modifier.padding(24.dp))
                     }
                     items(visibleSurveys, key = { it.id }) { survey ->
                         SurveyFeedCard(survey, onClick = { onSurveyClick(survey) })
@@ -289,7 +241,7 @@ fun SurveyFeedCard(
             )
 
             Text(
-                text = survey.category,
+                text = participationPurpose(survey.category),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = 7.dp)
@@ -312,6 +264,11 @@ fun SurveyFeedCard(
                 maxLines = 1
             )
         }
+        Text(
+            text = survey.participationLabel,
+            modifier = Modifier.padding(start = 4.dp, top = 10.dp),
+            color = HomeGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold
+        )
         // 제목
         Text(
             text = survey.title,
@@ -379,7 +336,7 @@ private fun HomeFloatingActions(
                 .background(HomeGreen).clickable(onClick = onSearchClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Search, contentDescription = "설문 검색", tint = Color.White,
+            Icon(Icons.Outlined.Search, contentDescription = "참여 모집 검색", tint = Color.White,
                 modifier = Modifier.size(26.dp))
         }
         Box(
@@ -387,7 +344,7 @@ private fun HomeFloatingActions(
                 .background(HomeGreen).clickable(onClick = onCreateSurveyClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Edit, contentDescription = "설문 만들기", tint = Color.White,
+            Icon(Icons.Outlined.Edit, contentDescription = "참여 모집하기", tint = Color.White,
                 modifier = Modifier.size(24.dp))
         }
     }

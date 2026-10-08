@@ -20,7 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 fun surveyEditState(survey: SurveyItem) = SurveyCreationState().apply {
-    title = survey.title; category = survey.category; introduction = survey.description.orEmpty()
+    title = survey.title; category = participationPurpose(survey.category); introduction = survey.description.orEmpty()
     audience = survey.audience.orEmpty(); deadline = survey.deadline.orEmpty()
     rewardPerPerson = survey.points.ifBlank { "0P" }; rewardRecipients = "${survey.targetCount ?: 0}명"
     selectedDuration = survey.duration.orEmpty(); imageData = survey.imageData

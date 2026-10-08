@@ -39,6 +39,54 @@ class MyPageViewModel(
     var resultsError by mutableStateOf<String?>(null); private set
     var savingProfile by mutableStateOf(false); private set
     var profileError by mutableStateOf<String?>(null); private set
+    var recruitments by mutableStateOf<List<RecruitmentItem>>(emptyList()); private set
+    var recruitmentApplications by mutableStateOf<List<RecruitmentApplicationItem>>(emptyList()); private set
+    var recruitmentLoading by mutableStateOf(false); private set
+    var recruitmentError by mutableStateOf<String?>(null); private set
+    var recruitmentBusy by mutableStateOf(false); private set
+    private var recruitmentGeneration = 0
+
+    fun loadRecruitmentActivity(token: String?) {
+        if (closed || recruitmentBusy) return
+        val request = ++recruitmentGeneration
+        recruitmentError = null
+        recruitmentLoading = token != null
+        if (closed || token == null) {
+            recruitments = emptyList(); recruitmentApplications = emptyList(); return
+        }
+        worker.submit {
+            val owned = runCatching { repository.getMyRecruitments(token) }
+            val applications = runCatching { repository.getMyRecruitmentApplications(token) }
+            ui.execute {
+                if (!closed && request == recruitmentGeneration) {
+                    recruitmentLoading = false
+                    owned.onSuccess { recruitments = it }
+                    applications.onSuccess { recruitmentApplications = it }
+                    val failures = listOfNotNull(owned.exceptionOrNull(), applications.exceptionOrNull())
+                    if (failures.any { it is SurveyApiException && it.status == 401 }) sessionExpired = true
+                    recruitmentError = failures.map { it.message ?: "모집 내역을 불러오지 못했습니다." }.distinct().joinToString("\n").ifBlank { null }
+                }
+            }
+        }
+    }
+
+    fun cancelRecruitmentApplication(token: String, id: Int, success: () -> Unit) {
+        if (closed || recruitmentBusy) return
+        val request = recruitmentGeneration
+        recruitmentBusy = true; recruitmentError = null
+        worker.submit {
+            val result = runCatching { repository.cancelRecruitmentApplication(token, id) }
+            ui.execute {
+                if (!closed && request == recruitmentGeneration) {
+                    recruitmentBusy = false
+                    result.fold({ success(); loadRecruitmentActivity(token) }, {
+                        sessionExpired = it is SurveyApiException && it.status == 401
+                        recruitmentError = it.message ?: "신청을 취소하지 못했습니다."
+                    })
+                }
+            }
+        }
+    }
 
     var coupons by mutableStateOf<List<WalletCoupon>>(emptyList())
         private set
@@ -71,6 +119,8 @@ class MyPageViewModel(
         participationCount = 0
         participations = emptyList()
         coupons = emptyList()
+        recruitments = emptyList(); recruitmentApplications = emptyList(); recruitmentBusy = false
+        recruitmentGeneration++; recruitmentLoading = false; recruitmentError = null
         error = null
         sessionExpired = false
         savingProfile = false
@@ -118,6 +168,7 @@ class MyPageViewModel(
                 }
             }
         }
+        loadRecruitmentActivity(token)
     }
 
     fun openResults(survey: SurveyItem, token: String) {

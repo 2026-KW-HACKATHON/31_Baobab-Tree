@@ -81,7 +81,6 @@ fun SurveyCreationStepOneScreen(
     var introduction by state::introduction
     var audience by state::audience
     var deadline by state::deadline
-    var selectingCategory by rememberSaveable { mutableStateOf(false) }
     val draft = SurveyDraftStepOne(title, category, introduction, audience, deadline)
     val ready = isSurveyBasicsComplete(draft)
 
@@ -108,36 +107,8 @@ fun SurveyCreationStepOneScreen(
                     onValueChange = { title = it }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
-                Column {
-                    SurveySelectionField("2. 카테고리 (필수)", category.ifBlank { "카테고리를 선택해주세요" },
-                        Icons.Outlined.ExpandMore, { selectingCategory = !selectingCategory })
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = selectingCategory,
-                        enter = androidx.compose.animation.expandVertically(
-                            expandFrom = androidx.compose.ui.Alignment.Top
-                        ),
-                        exit = androidx.compose.animation.shrinkVertically(
-                            shrinkTowards = androidx.compose.ui.Alignment.Top
-                        )
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp)
-                            .background(SurveyFormField, RoundedCornerShape(10.dp))
-                            .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))) {
-                            SurveyCategories.forEachIndexed { index, item ->
-                                Row(Modifier.fillMaxWidth()
-                                    .background(if (category == item) Color(0xFFEAF0E4) else Color.Transparent)
-                                    .clickable { category = item; selectingCategory = false }
-                                    .padding(horizontal = 14.dp, vertical = 14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(item, color = SurveyFormGreen, fontSize = 14.sp)
-                                    if (category == item) Text("✓", color = SurveyFormGreen)
-                                }
-                                if (index < SurveyCategories.lastIndex)
-                                    androidx.compose.material3.HorizontalDivider(color = SurveyFormBorder)
-                            }
-                        }
-                    }
-                }
+                SurveyFormChoiceField("2. 모집 목적 (필수)", category,
+                    SurveyCategories.map { it to it }) { category = it }
                 Spacer(modifier = Modifier.height(24.dp))
                 SurveyFieldSection(
                     number = 3,
@@ -219,11 +190,13 @@ private fun SurveyFieldSection(
 }
 
 @Composable
-private fun SurveyInput(
+internal fun SurveyInput(
     value: String,
     placeholder: String,
     onValueChange: (String) -> Unit,
-    multiline: Boolean = false
+    multiline: Boolean = false,
+    enabled: Boolean = true,
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default
 ) {
     BasicTextField(
         value = value,
@@ -233,6 +206,8 @@ private fun SurveyInput(
             .padding(horizontal = 16.dp)
             .heightIn(min = if (multiline) 120.dp else 52.dp),
         singleLine = !multiline,
+        enabled = enabled,
+        keyboardOptions = keyboardOptions,
         textStyle = TextStyle(
             color = Color.Black,
             fontFamily = SurveyFormInter,
@@ -264,15 +239,15 @@ private fun SurveyInput(
 }
 
 @Composable
-private fun SurveySelectionField(label: String, value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+internal fun SurveySelectionField(label: String, value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, enabled: Boolean = true) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Text(label, Modifier.padding(start = 4.dp, bottom = 11.dp), color = SurveyFormGreen,
             fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
             .background(SurveyFormField, RoundedCornerShape(10.dp))
             .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            .clickable(enabled = enabled, onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(value, Modifier.weight(1f), fontSize = 14.sp)
             Icon(icon, label, tint = SurveyFormGreen)
         }

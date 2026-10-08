@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.outlined.ChevronLeft
@@ -68,15 +70,7 @@ private data class SearchCategoryOption(
     val label: String
 )
 
-private val SearchCategories = listOf(
-    SearchCategoryOption("전체"),
-    SearchCategoryOption("생활·편의"),
-    SearchCategoryOption("지역·사회"),
-    SearchCategoryOption("교육·학습"),
-    SearchCategoryOption("문화·스포츠"),
-    SearchCategoryOption("경제·상권"),
-    SearchCategoryOption("건강·의료")
-)
+private val SearchCategories = (listOf("전체") + ParticipationPurposes).map { SearchCategoryOption(it) }
 
 @Composable
 fun SearchResultsScreen(
@@ -98,9 +92,10 @@ fun SearchResultsScreen(
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val visibleSurveys = surveys.filter { survey ->
-        (selectedCategory == "전체" || survey.category == selectedCategory) &&
+        (selectedCategory == "전체" || participationPurpose(survey.category) == selectedCategory) &&
             (searchQuery.isBlank() || survey.title.contains(searchQuery, ignoreCase = true) ||
-                survey.author.contains(searchQuery, ignoreCase = true))
+                survey.author.contains(searchQuery, ignoreCase = true) ||
+                survey.participationLabel.contains(searchQuery, ignoreCase = true))
     }
 
     Box(
@@ -125,7 +120,7 @@ fun SearchResultsScreen(
                 }
             )
             SurveyRequestContent(
-                loading = loading, error = error, data = visibleSurveys, onRetry = onRetry,
+                loading = loading, error = error?.takeIf { visibleSurveys.isEmpty() }, data = visibleSurveys, onRetry = onRetry,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 emptyMessage = "검색 결과가 없습니다."
             ) { items ->
@@ -138,6 +133,12 @@ fun SearchResultsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (error != null) item(span = { GridItemSpan(maxLineSpan) }) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(error)
+                            TextButton(onClick = onRetry) { Text("다시 시도") }
+                        }
+                    }
                     items(items, key = { it.id }) { survey ->
                         SurveyFeedCard(
                             survey = survey,
@@ -280,7 +281,7 @@ private fun SearchFloatingActions(
         ) {
             Icon(
                 imageVector = Icons.Outlined.Search,
-                contentDescription = "설문 검색",
+                contentDescription = "참여 모집 검색",
                 tint = Color.White,
                 modifier = Modifier.size(26.dp)
             )
@@ -293,7 +294,7 @@ private fun SearchFloatingActions(
                 .clickable(onClick = onCreateSurveyClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Edit, contentDescription = "설문 만들기",
+            Icon(Icons.Outlined.Edit, contentDescription = "참여 모집하기",
                 tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }

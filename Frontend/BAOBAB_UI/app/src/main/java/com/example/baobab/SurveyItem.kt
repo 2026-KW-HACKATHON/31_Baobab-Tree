@@ -2,14 +2,14 @@ package com.example.baobab
 
 import androidx.compose.ui.graphics.Color
 
-val SurveyCategories = listOf("생활·편의", "지역·사회", "교육·학습", "문화·스포츠", "경제·상권", "건강·의료")
+val SurveyCategories = ParticipationPurposes
 
 fun surveyCategoryImage(category: String): Int = when (category.trim()) {
     "생활·편의" -> R.drawable.search_card_01
-    "교육·학습" -> R.drawable.search_card_02
-    "지역·사회" -> R.drawable.search_card_03
+    "교육·학습", "학술·연구" -> R.drawable.search_card_02
+    "지역·사회", "지역·정책" -> R.drawable.search_card_03
     "문화·스포츠" -> R.drawable.search_card_04
-    "경제·상권" -> R.drawable.search_card_05
+    "경제·상권", "가게·서비스" -> R.drawable.search_card_05
     "건강·의료" -> R.drawable.search_card_06
     else -> R.drawable.search_card_01
 }
@@ -34,7 +34,9 @@ data class SurveyItem(
     val questions: List<SurveyQuestion> = emptyList(),
     val userId: Int? = null,
     val targetCount: Int? = null,
-    val imageData: String? = null
+    val imageData: String? = null,
+    val participationLabel: String = "온라인 설문",
+    val recruitmentId: Int? = null
 )
 
 data class SurveyQuestion(

@@ -9,6 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.AssignmentTurnedIn
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,13 +30,26 @@ private val MyMuted = Color(0xFF697369)
 fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
     onLogin: () -> Unit, onLogout: () -> Unit, onCreate: () -> Unit,
     onDelete: (SurveyItem) -> Unit = {}, onProfileUpdated: () -> Unit = {},
-    onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}, onEdit: (SurveyItem) -> Unit = {}) {
+    onOpenSurvey: (String) -> Unit = {}, onPointClick: () -> Unit = {}, onEdit: (SurveyItem) -> Unit = {},
+    onOpenRecruitment: (Int) -> Unit = {}, onManageRecruitment: (Int) -> Unit = {},
+    onPointHistory: () -> Unit = onPointClick) {
     val context = LocalContext.current
     val onOpenDrafts = LocalSurveyDraftList.current
     var editingProfile by remember(token) { mutableStateOf(false) }
     var confirmingPassword by remember(token) { mutableStateOf(false) }
     var profilePassword by remember(token) { mutableStateOf("") }
     var showParticipations by rememberSaveable { mutableStateOf(false) }
+    var cancellingApplication by remember { mutableStateOf<Int?>(null) }
+    cancellingApplication?.let { id ->
+        AlertDialog(onDismissRequest = { if (!model.recruitmentBusy) cancellingApplication = null },
+            title = { Text("신청을 취소할까요?") },
+            text = { Text(model.recruitmentError ?: "참여 일정 시작 전까지 취소할 수 있습니다.") },
+            confirmButton = { TextButton(onClick = {
+                token?.let { model.cancelRecruitmentApplication(it, id) { cancellingApplication = null } }
+            }, enabled = !model.recruitmentBusy) { Text("신청 취소") } },
+            dismissButton = { TextButton(onClick = { cancellingApplication = null }, enabled = !model.recruitmentBusy) { Text("닫기") } }
+        )
+    }
     if (confirmingPassword && token != null) AlertDialog(
         onDismissRequest = { if (!model.savingProfile) { confirmingPassword = false; profilePassword = ""; model.clearProfileError() } },
         title = { Text("비밀번호 확인") },
@@ -78,8 +94,8 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Outlined.Person, null, tint = MyGreen, modifier = Modifier.size(56.dp))
                 Spacer(Modifier.height(20.dp))
-                Text("내 설문과 포인트를 한곳에서", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("로그인하면 내 정보와 설문 통계를 볼 수 있어요.", color = MyMuted,
+                Text("내 참여와 모집을 한곳에서", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("로그인하면 신청 내역, 모집글과 포인트를 관리할 수 있어요.", color = MyMuted,
                     modifier = Modifier.padding(vertical = 16.dp))
                 Button(onLogin) { Text("로그인하기") }
             }
@@ -104,8 +120,8 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                     }
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            MyMetric("만든 설문", "${model.surveys.size}개", Modifier.weight(1f))
-                            MyMetric("참여한 설문", "${model.participationCount}개", Modifier.weight(1f))
+                            MyMetric("만든 글", "${model.surveys.size + model.recruitments.size}개", Modifier.weight(1f))
+                            MyMetric("참여·신청", "${model.participationCount + model.recruitmentApplications.size}개", Modifier.weight(1f))
                         }
                     }
                     item {
@@ -138,14 +154,21 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                     item {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("내가 만든 설문", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                            TextButton(onCreate) { Text("새 설문 만들기") }
+                            Text("내가 만든 글", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                            TextButton(onCreate) { Text("참여 모집하기") }
                         }
                     }
-                    if (model.surveys.isEmpty()) item {
+                    if (model.recruitmentLoading) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = MyGreen) }
+                    model.recruitmentError?.let { message -> item {
                         MyPanel {
-                            Text("아직 만든 설문이 없어요", fontWeight = FontWeight.Bold)
-                            Text("첫 설문을 만들고 사람들의 의견을 모아보세요.", color = MyMuted, fontSize = 14.sp)
+                            Text(message, color = MaterialTheme.colorScheme.error)
+                            TextButton(onClick = { model.loadRecruitmentActivity(token) }, enabled = !model.recruitmentBusy) { Text("모집 내역 다시 불러오기") }
+                        }
+                    } }
+                    if (model.surveys.isEmpty() && model.recruitments.isEmpty() && !model.recruitmentLoading) item {
+                        MyPanel {
+                            Text("아직 만든 글이 없어요", fontWeight = FontWeight.Bold)
+                            Text("설문이나 참여자 모집으로 사람들의 의견을 모아보세요.", color = MyMuted, fontSize = 14.sp)
                         }
                     }
                     items(model.surveys, key = { it.id }) { survey ->
@@ -153,7 +176,7 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(survey.category, color = MyGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("온라인 설문 · ${participationPurpose(survey.category)}", Modifier.weight(1f), color = MyGreen, fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
                                     Text(if (survey.status == "OPEN") "진행 중" else "마감", color = MyMuted, fontSize = 12.sp)
                                 }
                                 Text(survey.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -172,18 +195,26 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                             }
                         }
                     }
+                    items(model.recruitments, key = { "owned-recruitment-${it.id}" }) { recruitment ->
+                        MyOwnedRecruitmentCard(recruitment) { onManageRecruitment(recruitment.id) }
+                    }
                     item {
                         OutlinedButton(onClick = { showParticipations = !showParticipations }, modifier = Modifier.fillMaxWidth()) {
-                            Text("내가 참여한 설문 (${model.participationCount}) ${if (showParticipations) "▴" else "▾"}")
+                            Text("내 참여·신청 내역 (${model.participationCount + model.recruitmentApplications.size}) ${if (showParticipations) "▴" else "▾"}")
                         }
                     }
-                    if (showParticipations && model.participations.isEmpty()) item {
-                        MyPanel { Text("아직 참여한 설문이 없어요.", color = MyMuted) }
+                    if (showParticipations && model.participations.isEmpty() && model.recruitmentApplications.isEmpty() && !model.recruitmentLoading) item {
+                        MyPanel { Text("아직 참여하거나 신청한 내역이 없어요.", color = MyMuted) }
+                    }
+                    if (showParticipations) items(model.recruitmentApplications, key = { "application-${it.id}" }) { application ->
+                        RecruitmentApplicationCard(application, !model.recruitmentBusy,
+                            onDetail = { onOpenRecruitment(application.recruitment.id) },
+                            onCancel = { cancellingApplication = application.id }, onPointHistory = onPointHistory)
                     }
                     if (showParticipations) items(model.participations, key = { "history-${it.id}" }) { history ->
                         Surface(onClick = { onOpenSurvey(history.surveyId) }, shape = RoundedCornerShape(20.dp), color = Color.White) {
                             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(history.category, color = MyGreen, fontSize = 12.sp)
+                                Text(participationPurpose(history.category), color = MyGreen, fontSize = 12.sp)
                                 Text(history.title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 Text("${history.createdAt.take(10)} 참여 · ${history.rewardPoint}P", color = MyMuted, fontSize = 13.sp)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -206,6 +237,25 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                         modifier = Modifier.fillMaxWidth()) { Text("로그아웃", color = MaterialTheme.colorScheme.error) } }
                 }
             }
+        }
+    }
+}
+
+@Composable
+internal fun MyOwnedRecruitmentCard(item: RecruitmentItem, onManage: () -> Unit) {
+    Card(onClick = onManage, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = MyGreen)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("${item.feedItem().participationLabel} · ${item.purpose()}", Modifier.weight(1f),
+                    color = MyGreen, fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
+                Text(if (item.status == "OPEN") "진행 중" else "마감", color = MyMuted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+            Text(item.title, color = ActivityInk, fontSize = 17.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold)
+            Text("${item.acceptedCount}/${item.targetCount}명 선정 · %,dP 보상".format(item.rewardPoint),
+                color = MyMuted, fontSize = 13.sp, lineHeight = 21.sp)
+            Text("신청 마감 · ${activityDate(item.applicationDeadline)}", color = MyMuted, fontSize = 13.sp, lineHeight = 21.sp)
+            Text("신청자 관리 →", color = MyGreen, fontSize = 14.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

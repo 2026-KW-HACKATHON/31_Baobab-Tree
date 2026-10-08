@@ -19,13 +19,17 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun SurveyFormHeader(
     onBackClick: () -> Unit,
-    title: String = "설문 작성하기"
+    title: String = "설문 작성하기",
+    showDraftSave: Boolean = true,
+    onSaveDraft: (() -> Unit)? = LocalSurveyDraftSave.current,
+    enabled: Boolean = true
 ) {
-    val saveDraft = LocalSurveyDraftSave.current
+    val saveDraft = onSaveDraft
 
     Box(Modifier.fillMaxWidth().height(60.dp)) {
         IconButton(
             onClick = onBackClick,
+            enabled = enabled,
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = 8.dp)
@@ -46,9 +50,10 @@ fun SurveyFormHeader(
             color = Color(0xFF26372B)
         )
 
-        if (saveDraft != null) {
+        if (showDraftSave && saveDraft != null) {
             androidx.compose.material3.TextButton(
                 onClick = saveDraft,
+                enabled = enabled,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)
@@ -64,8 +69,7 @@ fun SurveyFormHeader(
 }
 
 @Composable
-fun SurveyFormProgress(currentStep: Int) {
-    val labels = listOf("기본 정보", "문항 작성", "설문 설정")
+fun SurveyFormProgress(currentStep: Int, labels: List<String> = listOf("기본 정보", "문항 작성", "설문 설정")) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.Top) {
         labels.forEachIndexed { index, label ->

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -47,10 +48,10 @@ private fun managementStatus(value: String): String = when (value) {
 }
 
 @Composable
-fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
+fun RecruitmentManageScreen(token: String, onBack: () -> Unit, initialRecruitmentId: Int? = null) {
     val repository = remember { HttpSurveyRepository(BuildConfig.SURVEY_API_BASE_URL) }
     val scope = rememberCoroutineScope()
-    var selectedId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf<Int?>(initialRecruitmentId) }
     var refresh by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -66,7 +67,7 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
             pending = null
             error = null
             notice = null
-            if (selectedId == null) onBack() else {
+            if (selectedId == null || initialRecruitmentId != null) onBack() else {
                 loading = true
                 selectedId = null
             }
@@ -139,17 +140,12 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding(),
-        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Column(Modifier.fillMaxSize().background(ActivityCream).safeDrawingPadding()) {
+        ActivityScreenHeader(if (selectedId == null) "내가 만든 모집" else "신청자 관리", onBack = { back() },
+            enabled = !busy, onRefresh = { loading = true; refresh++ }, refreshEnabled = !loading)
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { back() }, enabled = !busy) { Text("❮", color = ManageRecruitmentGreen) }
-                Text(if (selectedId == null) "내 모집글" else "신청자 관리",
-                    style = MaterialTheme.typography.headlineSmall, color = ManageRecruitmentGreen)
-            }
-            OutlinedButton(onClick = { loading = true; refresh++ }, enabled = !busy && !loading) { Text("새로고침") }
             notice?.let { Text(it, color = ManageRecruitmentGreen, modifier = Modifier.padding(vertical = 8.dp)) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp)) }
             if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -158,13 +154,13 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
             if (recruitments.isEmpty()) item { Text("등록한 모집글이 없습니다.") }
             items(recruitments, key = { it.id }) { item ->
                 RecruitmentManagementPanel {
-                    Text(item.title, style = MaterialTheme.typography.titleLarge)
+                    Text(item.title, style = MaterialTheme.typography.titleLarge, color = ActivityInk, lineHeight = 29.sp)
                     Text(item.organization)
                     Text(if (item.status == "CLOSED") "종료됨" else "진행 중", color = ManageRecruitmentGreen)
                     Text("선정 ${item.acceptedCount}/${item.targetCount}명 · 1인당 ${item.rewardPoint}P")
                     Text("신청 마감 ${managementDate(item.applicationDeadline)}")
                     Button(onClick = { loading = true; notice = null; selectedId = item.id }, enabled = !busy,
-                        colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen)) { Text("신청자 관리") }
+                        colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen, contentColor = Color.White)) { Text("신청자 관리") }
                 }
             }
         }
@@ -174,7 +170,7 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
             val uncompleted = applicants.count { it.status == "ACCEPTED" }
             item {
                 RecruitmentManagementPanel {
-                    Text(current.title, style = MaterialTheme.typography.titleLarge)
+                    Text(current.title, style = MaterialTheme.typography.titleLarge, color = ActivityInk, lineHeight = 29.sp)
                     Text("선정 ${current.acceptedCount}/${current.targetCount}명 · 참여 완료 ${applicants.count { it.status == "COMPLETED" }}명")
                     Text("1인당 보상 ${current.rewardPoint}P", color = ManageRecruitmentGreen)
                     Text(if (open) "선정된 참가자는 일정 종료 후 실제 참여를 확인하고 완료 처리해주세요." else "종료된 모집입니다. 신청 내역을 확인할 수 있습니다.")
@@ -201,12 +197,12 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
                             Button(onClick = {
                                 pending = RecruitmentManagementAction("ACCEPTED", current.id, person.id, person.user.name)
                             }, enabled = !busy && current.acceptedCount < current.targetCount,
-                                colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen)) { Text("참가자 선정") }
+                                colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen, contentColor = Color.White)) { Text("참가자 선정") }
                         } else {
                             Text("참여 완료 버튼은 일정 종료 후 실제 참여를 확인했을 때 눌러주세요.")
                             Button(onClick = {
                                 pending = RecruitmentManagementAction("COMPLETE", current.id, person.id, person.user.name, current.rewardPoint)
-                            }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen)) {
+                            }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = ManageRecruitmentGreen, contentColor = Color.White)) {
                                 Text(if (current.rewardPoint > 0) "참여 완료 · ${current.rewardPoint}P 지급" else "참여 완료 처리")
                             }
                         }
@@ -217,6 +213,7 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
                 }
             }
         }
+    }
     }
     pending?.let { action ->
         AlertDialog(
@@ -241,8 +238,8 @@ fun RecruitmentManageScreen(token: String, onBack: () -> Unit) {
 
 @Composable
 private fun RecruitmentManagementPanel(content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxWidth(), color = Color.White, shape = RoundedCornerShape(12.dp),
+    Surface(Modifier.fillMaxWidth(), color = Color.White, contentColor = ActivityInk, shape = RoundedCornerShape(20.dp),
         border = BorderStroke(1.dp, Color(0xFFD9E0D5))) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }

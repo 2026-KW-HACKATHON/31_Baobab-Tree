@@ -70,6 +70,17 @@ class BaobabViewModel : ViewModel() {
     var homeSearchTerm by mutableStateOf("")
     var searchTerm by mutableStateOf("")
     var searchCategory by mutableStateOf("전체")
+    var resumeRecruitmentAfterLogin by mutableStateOf(false)
+    var recruitmentEntry by mutableStateOf("APPLICATIONS")
+        private set
+    var selectedRecruitmentId by mutableStateOf(0)
+        private set
+
+    fun openRecruitment(id: Int = 0, page: String = "DETAIL") {
+        selectedRecruitmentId = id
+        recruitmentEntry = page
+        navigate(BaobabScreen.RECRUITMENTS)
+    }
 
     fun openSurvey(survey: SurveyItem) {
         selectedSurvey = survey

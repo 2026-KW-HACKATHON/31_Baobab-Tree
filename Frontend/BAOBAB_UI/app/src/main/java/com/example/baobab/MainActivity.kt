@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         if (viewModel.currentScreen == BaobabScreen.MY) viewModel.navigate(BaobabScreen.LOGIN)
                     }
                 }
+                var choosingParticipation by remember { mutableStateOf(false) }
                 var pendingDeletion by remember { mutableStateOf<SurveyItem?>(null) }
                 pendingDeletion?.let { survey ->
                     SurveyDeleteDialog(
@@ -137,6 +138,23 @@ class MainActivity : ComponentActivity() {
                     submitting = account.busy
                 ) { onDraftCreate, onDraftBack, onDraftCreated ->
 
+                    if (choosingParticipation) {
+                        ParticipationCreationDialog(
+                            onDismiss = { choosingParticipation = false },
+                            onSurvey = {
+                                choosingParticipation = false
+                                if (account.token != null) onDraftCreate() else {
+                                    viewModel.resumeCreationAfterLogin = true
+                                    account.clearError()
+                                    viewModel.navigate(BaobabScreen.LOGIN)
+                                }
+                            },
+                            onRecruitment = {
+                                choosingParticipation = false
+                                viewModel.openRecruitment(page = "CREATE")
+                            }
+                        )
+                    }
                     BackHandler(enabled = viewModel.canGoBack || account.busy) {
                         if (!account.busy) onDraftBack()
                     }
@@ -160,6 +178,9 @@ class MainActivity : ComponentActivity() {
                                             account.checkParticipation(requireNotNull(participation.survey)) {
                                                 viewModel.navigate(BaobabScreen.PARTICIPATE)
                                             }
+                                        } else if (viewModel.resumeRecruitmentAfterLogin) {
+                                            viewModel.resumeRecruitmentAfterLogin = false
+                                            viewModel.goBack()
                                         } else if (viewModel.resumeCreationAfterLogin) {
                                             viewModel.resumeCreationAfterLogin = false
                                             onDraftCreate()
@@ -171,6 +192,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     },
                                     onGuest = {
+                                        viewModel.resumeRecruitmentAfterLogin = false
                                         viewModel.resumeParticipationAfterLogin =
                                             false; viewModel.resumeCreationAfterLogin =
                                         false; viewModel.goHome()
@@ -193,37 +215,28 @@ class MainActivity : ComponentActivity() {
                         // 홈
                         BaobabScreen.HOME -> {
                             LocalNetworkPermissionGate {
-                                LaunchedEffect(Unit) { surveyData.loadSurveys() }
+                                LaunchedEffect(Unit) { surveyData.loadSurveys(); surveyData.loadRecruitments(force = true) }
                                 LaunchedEffect(account.token) { myPage.load(account.token) }
                                 HomeScreen(
                                     currentPoint = myPage.profile?.point ?: account.point,
                                     loggedIn = account.token != null,
                                     onPointClick = { viewModel.navigate(BaobabScreen.POINTS) },
-                                    surveys = surveyData.listState.data.orEmpty(),
-                                    loading = surveyData.listState.loading,
-                                    error = surveyData.listState.error,
+                                    surveys = surveyData.feedItems,
+                                    loading = surveyData.listState.loading || surveyData.recruitmentState.loading,
+                                    error = listOfNotNull(surveyData.listState.error, surveyData.recruitmentState.error).joinToString("\n").ifBlank { null },
                                     onRetry = {
-                                        surveyData.loadSurveys(force = true); myPage.load(
+                                        surveyData.loadSurveys(force = true); surveyData.loadRecruitments(force = true); myPage.load(
                                         account.token
                                     )
                                     },
                                     searchTerm = viewModel.homeSearchTerm,
                                     onSearchTermChange = { viewModel.homeSearchTerm = it },
                                     onSurveyClick = { survey ->
-                                        viewModel.openSurvey(survey)
+                                        survey.recruitmentId?.let { viewModel.openRecruitment(it) }
+                                            ?: viewModel.openSurvey(survey)
                                     },
                                     onSearchClick = { query -> viewModel.openSearch(query) },
-                                    onCreateSurveyClick = {
-                                        if (account.token != null) onDraftCreate()
-                                        else {
-                                            viewModel.resumeCreationAfterLogin = true
-                                            account.clearError()
-                                            viewModel.navigate(BaobabScreen.LOGIN)
-                                        }
-                                    },
-                                    onRecruitmentClick = {
-                                        viewModel.navigate(BaobabScreen.RECRUITMENTS)
-                                    },
+                                    onCreateSurveyClick = { choosingParticipation = true },
                                     onMyClick = {
                                         viewModel.navigate(BaobabScreen.MY)
                                     }
@@ -234,26 +247,20 @@ class MainActivity : ComponentActivity() {
                         // 검색 결과
                         BaobabScreen.SEARCH -> {
                             LocalNetworkPermissionGate {
-                                LaunchedEffect(Unit) { surveyData.loadSurveys() }
+                                LaunchedEffect(Unit) { surveyData.loadSurveys(); surveyData.loadRecruitments(force = true) }
                                 SearchResultsScreen(
-                                    surveys = surveyData.listState.data.orEmpty(),
-                                    loading = surveyData.listState.loading,
-                                    error = surveyData.listState.error,
-                                    onRetry = { surveyData.loadSurveys(force = true) },
+                                    surveys = surveyData.feedItems,
+                                    loading = surveyData.listState.loading || surveyData.recruitmentState.loading,
+                                    error = listOfNotNull(surveyData.listState.error, surveyData.recruitmentState.error).joinToString("\n").ifBlank { null },
+                                    onRetry = { surveyData.loadSurveys(force = true); surveyData.loadRecruitments(force = true) },
                                     searchTerm = viewModel.searchTerm,
                                     category = viewModel.searchCategory,
                                     onCategoryChange = { viewModel.searchCategory = it },
                                     onSurveyClick = { survey ->
-                                        viewModel.openSurvey(survey)
+                                        survey.recruitmentId?.let { viewModel.openRecruitment(it) }
+                                            ?: viewModel.openSurvey(survey)
                                     },
-                                    onCreateSurveyClick = {
-                                        if (account.token != null) viewModel.beginCreation()
-                                        else {
-                                            viewModel.resumeCreationAfterLogin = true
-                                            account.clearError()
-                                            viewModel.navigate(BaobabScreen.LOGIN)
-                                        }
-                                    },
+                                    onCreateSurveyClick = { choosingParticipation = true },
                                     onMyClick = {
                                         viewModel.navigate(BaobabScreen.MY)
                                     },
@@ -506,8 +513,12 @@ class MainActivity : ComponentActivity() {
                                 key(account.token) {
                                     RecruitmentHubScreen(
                                         token = account.token,
+                                        initialPage = viewModel.recruitmentEntry,
+                                        initialDetailId = viewModel.selectedRecruitmentId,
                                         onBack = { viewModel.goBack() },
                                         onLogin = {
+                                            viewModel.resumeRecruitmentAfterLogin = true
+                                            account.clearError()
                                             viewModel.navigate(BaobabScreen.LOGIN)
                                         },
                                         onHome = {
@@ -546,6 +557,9 @@ class MainActivity : ComponentActivity() {
                             LocalNetworkPermissionGate {
                                 MyPageScreen(
                                     myPage, account.token,
+                                    onOpenRecruitment = { viewModel.openRecruitment(it) },
+                                    onManageRecruitment = { viewModel.openRecruitment(it, page = "MANAGE") },
+                                    onPointHistory = { viewModel.navigate(BaobabScreen.POINT_HISTORY) },
                                     onBack = { viewModel.goHome() },
                                     onLogin = {
                                         account.clearError(); viewModel.navigate(
@@ -553,7 +567,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     },
                                     onLogout = { account.logout(); myPage.load(null); viewModel.goHome() },
-                                    onCreate = { onDraftCreate() },
+                                    onCreate = { choosingParticipation = true },
                                     onProfileUpdated = { surveyData.loadSurveys(force = true) },
                                     onEdit = { account.clearError(); viewModel.beginEditing(it) },
                                     onOpenSurvey = { viewModel.openSurvey(SurveyItem(id = it)) },

@@ -44,7 +44,7 @@ data class SavedSurveyDraft(
  * JWT의 userId는 기기 안의 저장본을 구분하는 용도로만 사용합니다.
  * 서버 인증은 기존 로그인 처리에서 수행합니다.
  */
-private fun draftOwner(token: String?): String? {
+internal fun draftOwner(token: String?): String? {
     if (token == null) return null
 
     return runCatching {
@@ -63,7 +63,7 @@ private fun draftOwner(token: String?): String? {
     }.getOrNull()
 }
 
-private fun draftKey(owner: String): String {
+internal fun draftKey(owner: String): String {
     val server = MessageDigest.getInstance("SHA-256")
         .digest(BuildConfig.SURVEY_API_BASE_URL.toByteArray())
         .joinToString("") {
@@ -104,7 +104,7 @@ private fun SurveyCreationState.restoreDraft(
     draft: CompletedSurveyDraft
 ) {
     title = draft.basicInfo.title
-    category = draft.basicInfo.category
+    category = draft.basicInfo.category.takeIf { it.isNotBlank() }?.let { participationPurpose(it) }.orEmpty()
     introduction = draft.basicInfo.introduction
     audience = draft.basicInfo.audience
     deadline = draft.basicInfo.deadline

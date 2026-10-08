@@ -34,7 +34,7 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
     onRelatedSurveyClick: (SurveyItem) -> Unit = {}, relatedSurveys: List<SurveyItem> = emptyList(),
     canDelete: Boolean = false, onDelete: () -> Unit = {}, onBack: () -> Unit = {}, onEdit: () -> Unit = {}) {
     val context = LocalContext.current
-    val related = relatedSurveys.filter { it.category == survey.category && it.id != survey.id }
+    val related = relatedSurveys.filter { participationPurpose(it.category) == participationPurpose(survey.category) && it.id != survey.id }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -49,7 +49,7 @@ fun SurveyDetailScreen(onParticipateClick: () -> Unit = {}, survey: SurveyItem =
             SurveyImage(survey, Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(24.dp)))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(color = Color(0xFFEAF0E4), shape = RoundedCornerShape(8.dp)) {
-                    Text(survey.category.ifBlank { "일반 설문" }, Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Text(participationPurpose(survey.category), Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = DetailGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(survey.title, fontSize = 25.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = DetailGreen)

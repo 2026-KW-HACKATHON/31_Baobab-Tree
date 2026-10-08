@@ -63,37 +63,42 @@ private fun rStatus(value: String) = when (value) {
 @Composable
 fun RecruitmentHubScreen(
     token: String?, onBack: () -> Unit, onLogin: () -> Unit,
-    onHome: () -> Unit, onSearch: () -> Unit, onMy: () -> Unit, onPointHistory: () -> Unit
+    onHome: () -> Unit, onSearch: () -> Unit, onMy: () -> Unit, onPointHistory: () -> Unit,
+    initialPage: String = "APPLICATIONS", initialDetailId: Int = 0
 ) {
     val repository = remember { HttpSurveyRepository(BuildConfig.SURVEY_API_BASE_URL) }
     val scope = rememberCoroutineScope()
-    var page by rememberSaveable { mutableStateOf("LIST") }
-    var previousPage by rememberSaveable { mutableStateOf("LIST") }
-    var detailId by rememberSaveable { mutableIntStateOf(0) }
-    var search by rememberSaveable { mutableStateOf("") }
-    var submittedSearch by rememberSaveable { mutableStateOf("") }
-    var type by rememberSaveable { mutableStateOf("") }
+    var page by rememberSaveable { mutableStateOf(initialPage) }
+    var previousPage by rememberSaveable { mutableStateOf(initialPage) }
+    var detailId by rememberSaveable { mutableIntStateOf(initialDetailId) }
     var applicationFilter by rememberSaveable { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    var items by remember { mutableStateOf(emptyList<RecruitmentItem>()) }
     var applications by remember { mutableStateOf(emptyList<RecruitmentApplicationItem>()) }
     var detail by remember { mutableStateOf<RecruitmentItem?>(null) }
     var ownDetail by remember { mutableStateOf(false) }
     var cancelId by remember { mutableStateOf<Int?>(null) }
     fun navigate(next: String) {
-        if (!busy) { loading = true; error = null; notice = null; page = next }
+        if (!busy) {
+            if (next == "LIST") { onBack(); return }
+            loading = true; error = null; notice = null; page = next
+        }
     }
     fun back() {
-        if (!busy) { if (page == "LIST") onBack() else navigate(if (page == "DETAIL") previousPage else "LIST") }
+        if (!busy) {
+            if (page == initialPage || page == "LIST") onBack()
+            else navigate(if (page == "DETAIL" && previousPage != "DETAIL") previousPage else initialPage)
+        }
     }
     fun openDetail(id: Int) { previousPage = page; detailId = id; navigate("DETAIL") }
     BackHandler { back() }
     if (page == "MANAGE" && token != null) {
-        RecruitmentManageScreen(token, onBack = { navigate("LIST"); refresh++ })
+        RecruitmentManageScreen(token, initialRecruitmentId = detailId.takeIf { it > 0 }, onBack = {
+            if (initialPage == "MANAGE") onBack() else navigate("DETAIL")
+        })
         return
     }
     if (page == "CREATE" && token != null) {
@@ -103,13 +108,10 @@ fun RecruitmentHubScreen(
         })
         return
     }
-    LaunchedEffect(page, detailId, submittedSearch, type, refresh, token) {
+    LaunchedEffect(page, detailId, refresh, token) {
         loading = true; error = null
         try {
             when (page) {
-                "LIST" -> items = withContext(Dispatchers.IO) {
-                    repository.getRecruitments(activityType = type.takeIf { it.isNotEmpty() }, search = submittedSearch.takeIf { it.isNotBlank() })
-                }
                 "DETAIL" -> {
                     detail = null
                     val result = withContext(Dispatchers.IO) {
@@ -137,90 +139,45 @@ fun RecruitmentHubScreen(
             finally { busy = false }
         }
     }
-    ProvideTextStyle(TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 20.sp, color = RInk)) {
-        Scaffold(modifier = Modifier.fillMaxSize().safeDrawingPadding(), containerColor = RCream,
-            bottomBar = {
-                if (page != "DETAIL") Column {
-                    if (page == "LIST") Button(
-                        onClick = { if (token == null) onLogin() else navigate("CREATE") }, enabled = !busy,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(28.dp), colors = ButtonDefaults.buttonColors(containerColor = RGreen)
-                    ) {Text(
-                        text = "＋ 참여자 모집하기",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    ) }
-                    RBottomNavigation(!busy, onHome, onSearch, onMy)
+    if (page == "DETAIL") {
+        RecruitmentDetailScreen(detail, loading, busy, error, notice, token != null, ownDetail,
+            onBack = { back() }, onRetry = { loading = true; refresh++ }, onLogin = onLogin,
+            onManage = { navigate("MANAGE") }, onApply = { slotId, message ->
+                val currentToken = token
+                if (currentToken != null) action {
+                    withContext(Dispatchers.IO) { repository.applyRecruitment(currentToken, detailId, slotId, message, true) }
+                    applicationFilter = ""; page = "APPLICATIONS"
+                    notice = "신청을 처리했습니다. 아래에서 상태를 확인해주세요."
                 }
+            })
+        return
+    }
+    ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+        Scaffold(modifier = Modifier.fillMaxSize().safeDrawingPadding(), containerColor = RCream,
+            topBar = {
+                ActivityScreenHeader(if (page == "APPLICATIONS") "내 신청 내역" else "참여 모집",
+                    onBack = { back() }, enabled = !busy,
+                    onRefresh = { loading = true; refresh++ }, refreshEnabled = !loading)
             }
         ) { padding ->
             key(page, detailId) {
                 Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (page == "LIST") {
-                        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                            BaobabLogo(Modifier.weight(1f))
-                            IconButton(onClick = { loading = true; refresh++ }, enabled = !loading && !busy) {
-                                Icon(Icons.Outlined.Refresh, "새로고침", tint = RGreen)
-                            }
-                            IconButton(onClick = onMy, enabled = !busy) {
-                                Icon(Icons.Outlined.Person, "마이페이지", tint = RGreen, modifier = Modifier.size(28.dp))
-                            }
-                        }
-                        Surface(shape = RoundedCornerShape(14.dp), color = Color(0xFFF1EEE7)) {
-                            Row(Modifier.fillMaxWidth()) {
-                                TextButton(onClick = onHome, modifier = Modifier.weight(1f)) { Text("설문", color = RInk, fontSize = 14.sp) }
-                                Surface(Modifier.weight(1f), color = RSage, shape = RoundedCornerShape(14.dp)) {
-                                    Text("참여자 모집", Modifier.padding(12.dp), color = RGreen, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                }
-                            }
-                        }
-                        OutlinedTextField(search, { search = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            placeholder = { Text("참여할 연구를 찾아보세요", fontSize = 14.sp) },
-                            leadingIcon = { Icon(Icons.Outlined.Search, null, tint = RGreen) },
-                            trailingIcon = { IconButton(onClick = { submittedSearch = search.trim(); loading = true; refresh++ }) {
-                                Icon(Icons.Outlined.ChevronRight, "검색", tint = RGreen)
-                            } }, shape = RoundedCornerShape(10.dp), colors = RFieldColors(), textStyle = TextStyle(fontSize = 14.sp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { submittedSearch = search.trim(); loading = true; refresh++ }))
-                        RFilters(listOf("" to "전체", "EXPERIMENT" to "실험", "INTERVIEW" to "인터뷰", "USABILITY" to "사용성 테스트", "OTHER" to "기타"), type) {
-                            if (type != it) { type = it; loading = true }
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = { navigate("APPLICATIONS") }) { Text("내 신청 내역", color = RGreen) }
-                            TextButton(onClick = { if (token == null) onLogin() else navigate("MANAGE") }) { Text("내 모집글 관리", color = RGreen) }
-                        }
-                    } else RHeader(if (page == "DETAIL") "모집 상세" else "내 신청 내역", !busy,
-                        onRefresh = { loading = true; refresh++ }, refreshEnabled = !loading && !busy) { back() }
                     if (page == "APPLICATIONS") RFilters(listOf("" to "전체", "APPLIED" to "신청 중", "ACCEPTED" to "선정", "COMPLETED" to "완료", "CANCELLED" to "취소", "REJECTED" to "미선정"), applicationFilter) { applicationFilter = it }
+                    if (token == null && page in listOf("CREATE", "MANAGE")) {
+                        RPrimaryButton("로그인하고 계속하기", true, onLogin)
+                    }
                     notice?.let { Text(it, color = RGreen) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = RGreen)
                     if (!loading && error == null) when (page) {
-                        "LIST" -> {
-                            if (items.isEmpty()) Text("현재 모집 중인 글이 없습니다.", color = RInk)
-                            items.forEach { item -> RRecruitmentCard(item) { openDetail(item.id) } }
-                        }
-                        "DETAIL" -> detail?.let { item ->
-                            RDetail(item, busy, token != null, ownDetail, onLogin, onManage = { navigate("MANAGE") }, onApply = { slotId, message ->
-                                val currentToken = token
-                                if (currentToken != null) action {
-                                    withContext(Dispatchers.IO) { repository.applyRecruitment(currentToken, item.id, slotId, message, true) }
-                                    applicationFilter = ""
-                                    page = "APPLICATIONS"
-                                    notice = "신청을 처리했습니다. 아래에서 상태를 확인해주세요."
-                                }
-                            })
-                        }
                         "APPLICATIONS" -> {
                             if (token == null) RPrimaryButton("로그인하고 신청 내역 보기", true, onLogin)
                             else {
                                 val visible = applications.filter { applicationFilter.isEmpty() || it.status == applicationFilter }
                                 if (visible.isEmpty()) Text("해당 신청 내역이 없습니다.", color = RInk)
                                 visible.forEach { application ->
-                                    RApplicationCard(application, !busy, onDetail = { openDetail(application.recruitment.id) },
+                                    RecruitmentApplicationCard(application, !busy, onDetail = { openDetail(application.recruitment.id) },
                                         onCancel = { cancelId = application.id }, onPointHistory = onPointHistory)
                                 }
                             }
@@ -304,90 +261,9 @@ private fun RRecruitmentCard(item: RecruitmentItem, onClick: () -> Unit) {
     }
 }
 @Composable
-private fun RDetail(item: RecruitmentItem, busy: Boolean, loggedIn: Boolean, owner: Boolean, onLogin: () -> Unit, onManage: () -> Unit, onApply: (Int, String) -> Unit) {
-    var slotId by rememberSaveable(item.id) { mutableIntStateOf(0) }
-    var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
-    var agreed by rememberSaveable(item.id) { mutableStateOf(false) }
-    var message by rememberSaveable(item.id) { mutableStateOf("") }
-    val selected = item.slots.firstOrNull { it.id == slotId }
-    val accepting = item.status == "OPEN" && runCatching { OffsetDateTime.parse(item.applicationDeadline).isAfter(OffsetDateTime.now()) }.getOrDefault(false)
-    RBadge("${rType(item.activityType)} · ${if (item.participationMode == "ONLINE") "온라인" else "오프라인"}")
-    Text(item.title, color = RGreen, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-    Text(item.organization, color = RInk, fontSize = 14.sp)
-    RPanel {
-        RInfo("참여 보상", "${rNumber(item.rewardPoint)} P", true)
-        RInfo("소요 시간", "약 ${item.durationMinutes}분")
-        RInfo("참여 장소", item.location)
-        RInfo("모집 인원", "${item.acceptedCount} / ${item.targetCount}명")
-        RInfo("신청 마감", rDate(item.applicationDeadline))
-    }
-    Text("연구 소개", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = RGreen)
-    RPanel { Text(item.description, color = RInk, lineHeight = 22.sp) }
-    Text("신청 조건", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = RGreen)
-    RPanel { Text(item.eligibility, color = RInk) }
-    if (owner) RPrimaryButton("내 모집글 · 신청자 관리", !busy, onManage)
-    else if (!accepting) Text("신청이 마감된 모집입니다.", color = RGreen)
-    else {
-        Text("가능한 일정 선택", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = RGreen)
-        OutlinedButton(onClick = { expanded = !expanded }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, RBorder), colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = RInk)) {
-            Text(selected?.let { rDate(it.startsAt) } ?: "일정을 선택해주세요", Modifier.weight(1f).padding(vertical = 6.dp))
-            Icon(Icons.Outlined.KeyboardArrowDown, "일정 펼치기", tint = RGreen)
-        }
-        if (expanded) RPanel {
-            item.slots.forEach { slot ->
-                val future = runCatching { OffsetDateTime.parse(slot.startsAt).isAfter(OffsetDateTime.now()) }.getOrDefault(false)
-                TextButton(onClick = { slotId = slot.id; expanded = false }, enabled = !busy && future, modifier = Modifier.fillMaxWidth()) {
-                    Text("${if (slotId == slot.id) "✓ " else ""}${rDate(slot.startsAt)} ~ ${rDate(slot.endsAt, "a h시 mm분")}", color = RGreen)
-                }
-            }
-        }
-        OutlinedTextField(message, { if (it.length <= 2000) message = it }, modifier = Modifier.fillMaxWidth(), label = { Text("신청 메시지 (선택)") }, enabled = !busy,
-            shape = RoundedCornerShape(12.dp), colors = RFieldColors())
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(agreed, { agreed = it }, enabled = !busy, colors = CheckboxDefaults.colors(checkedColor = RGreen))
-            Text("모집자가 신청자 이름·프로필과 신청 메시지를 확인하는 데 동의합니다.", Modifier.weight(1f), color = RInk, fontSize = 13.sp)
-        }
-        if (!loggedIn) RPrimaryButton("로그인하고 신청하기", !busy, onLogin)
-        else RPrimaryButton("참가 신청하기", !busy && agreed && selected != null) { onApply(slotId, message.trim()) }
-    }
-}
-@Composable
-private fun RInfo(label: String, value: String, emphasis: Boolean = false) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, Modifier.width(84.dp), color = RInk, fontSize = 14.sp)
-        Text(value, Modifier.weight(1f), color = if (emphasis) RGreen else RInk, fontSize = if (emphasis) 17.sp else 14.sp,
-            fontWeight = if (emphasis) FontWeight.Bold else FontWeight.Normal)
-    }
-}
-@Composable
-private fun RApplicationCard(item: RecruitmentApplicationItem, enabled: Boolean, onDetail: () -> Unit, onCancel: () -> Unit, onPointHistory: () -> Unit) {
-    RPanel {
-        RBadge(rStatus(item.status), item.status in listOf("APPLIED", "REJECTED", "CANCELLED"))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(item.recruitment.title, Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RGreen)
-            IconButton(onClick = onDetail, enabled = enabled) { Icon(Icons.Outlined.ChevronRight, "모집 상세", tint = RInk) }
-        }
-        Text(item.recruitment.organization, color = RInk)
-        Text(if (item.status == "APPLIED") "신청일 ${rDate(item.createdAt, "M월 d일")}" else "${rDate(item.slot.startsAt)} · ${item.recruitment.location}", color = RInk)
-        when (item.status) {
-            "APPLIED" -> Text("선정 결과를 기다리고 있어요.", color = Color(0xFF7657AF))
-            "ACCEPTED" -> Text("참여 예정 · ${rNumber(item.recruitment.rewardPoint)} P", color = RGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            "COMPLETED" -> {
-                Text(if (item.paidAt != null) "+${rNumber(item.recruitment.rewardPoint)} P 지급 완료" else "참여 완료 · 보상 0P", color = RGreen, fontWeight = FontWeight.Bold)
-                OutlinedButton(onClick = onPointHistory, enabled = enabled, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) { Text("포인트 내역 보기", color = RInk) }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onDetail, enabled = enabled, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) { Text("상세 보기", color = RInk) }
-            if (item.status in listOf("APPLIED", "ACCEPTED")) OutlinedButton(onClick = onCancel, enabled = enabled, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) { Text("신청 취소", color = RInk) }
-        }
-    }
-}
-@Composable
 private fun RPrimaryButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Button(onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled, shape = RoundedCornerShape(28.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = RGreen)) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+        colors = ButtonDefaults.buttonColors(containerColor = RGreen, contentColor = Color.White)) { Text(text, fontSize = 15.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold) }
 }
 @Composable
 private fun RFieldColors() = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White,
