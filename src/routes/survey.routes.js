@@ -2,6 +2,7 @@ const express = require('express');
 const { transaction } = require('../lib/transaction');
 const { randomBytes, createHash } = require('node:crypto');
 const { SurveyService } = require('../services/survey.service');
+const { RecruitmentService } = require('../services/recruitment.service');
 const auth = require('../middlewares/auth.middleware');
 
 const allowedAmounts = [1000, 3000, 5000];
@@ -148,6 +149,7 @@ async function kakaoRequest(action, body) {
 function createSurveyRouter(service = new SurveyService()) {
   const router = express.Router();
   const prisma = service.prisma;
+  const recruitmentService = new RecruitmentService(prisma);
 
   const handle = (status, action) => async (req, res, next) => {
     try {
@@ -156,6 +158,61 @@ function createSurveyRouter(service = new SurveyService()) {
       next(error);
     }
   };
+
+  // 공개 모집 목록
+  router.get('/recruitments', handle(200, req =>
+    recruitmentService.list(req.query)
+  ));
+
+  // 내가 등록한 모집글: ID 라우트보다 먼저 등록
+  router.get('/recruitments/mine', auth, handle(200, req =>
+    recruitmentService.mine(req.user.userId)
+  ));
+
+  // 모집글 상세
+  router.get('/recruitments/:recruitmentId', handle(200, req =>
+    recruitmentService.detail(req.params.recruitmentId)
+  ));
+
+  // 모집글 등록
+  router.post('/recruitments', auth, handle(201, req =>
+    recruitmentService.create(req.user.userId, req.body)
+  ));
+
+  // 내 신청 내역
+  router.get('/recruitment-applications/me', auth, handle(200, req =>
+    recruitmentService.myApplications(req.user.userId)
+  ));
+
+  // 참가 신청
+  router.post('/recruitments/:recruitmentId/applications', auth, handle(200, req =>
+    recruitmentService.apply(req.user.userId, req.params.recruitmentId, req.body)
+  ));
+
+  // 모집자의 신청자 목록
+  router.get('/recruitments/:recruitmentId/applications', auth, handle(200, req =>
+    recruitmentService.applicants(req.user.userId, req.params.recruitmentId)
+  ));
+
+  // 신청 취소
+  router.post('/recruitment-applications/:applicationId/cancel', auth, handle(200, req =>
+    recruitmentService.cancel(req.user.userId, req.params.applicationId)
+  ));
+
+  // 선정 / 미선정
+  router.patch('/recruitment-applications/:applicationId/status', auth, handle(200, req =>
+    recruitmentService.decide(req.user.userId, req.params.applicationId, req.body?.status)
+  ));
+
+  // 참여 확인 및 보상 지급
+  router.post('/recruitment-applications/:applicationId/complete', auth, handle(200, req =>
+    recruitmentService.complete(req.user.userId, req.params.applicationId)
+  ));
+
+  // 모집 종료 및 미사용 보상 환급
+  router.post('/recruitments/:recruitmentId/close', auth, handle(200, req =>
+    recruitmentService.close(req.user.userId, req.params.recruitmentId)
+  ));
 
   router.get('/health', handle(200, async () => {
     await prisma.$queryRaw`SELECT 1`;

@@ -278,6 +278,187 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             )
         }
     }
+    fun getRecruitments(
+        activityType: String? = null,
+        search: String? = null
+    ): List<RecruitmentItem> = parse {
+        val query = mutableListOf<String>()
+
+        if (!activityType.isNullOrBlank()) {
+            query += "activityType=" +
+                    java.net.URLEncoder.encode(activityType, "UTF-8")
+        }
+
+        if (!search.isNullOrBlank()) {
+            query += "search=" +
+                    java.net.URLEncoder.encode(search, "UTF-8")
+        }
+
+        val path = "recruitments" + if (query.isEmpty()) {
+            ""
+        } else {
+            "?" + query.joinToString("&")
+        }
+
+        requireNotNull(
+            gson.fromJson(
+                request(path),
+                Array<RecruitmentItem>::class.java
+            )
+        ).toList()
+    }
+
+    fun getRecruitment(id: Int): RecruitmentItem = parse {
+        requireNotNull(
+            gson.fromJson(
+                request("recruitments/$id"),
+                RecruitmentItem::class.java
+            )
+        )
+    }
+
+    fun getMyRecruitments(token: String): List<RecruitmentItem> = parse {
+        requireNotNull(
+            gson.fromJson(
+                request("recruitments/mine", token = token),
+                Array<RecruitmentItem>::class.java
+            )
+        ).toList()
+    }
+
+    fun createRecruitment(
+        token: String,
+        input: RecruitmentCreateInput
+    ): RecruitmentItem = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitments",
+                    body = input,
+                    token = token
+                ),
+                RecruitmentItem::class.java
+            )
+        )
+    }
+
+    fun applyRecruitment(
+        token: String,
+        recruitmentId: Int,
+        slotId: Int,
+        message: String,
+        agreed: Boolean
+    ): RecruitmentActionResult = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitments/$recruitmentId/applications",
+                    body = mapOf(
+                        "slotId" to slotId,
+                        "message" to message,
+                        "agreed" to agreed
+                    ),
+                    token = token
+                ),
+                RecruitmentActionResult::class.java
+            )
+        )
+    }
+
+    fun getMyRecruitmentApplications(
+        token: String
+    ): List<RecruitmentApplicationItem> = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    "recruitment-applications/me",
+                    token = token
+                ),
+                Array<RecruitmentApplicationItem>::class.java
+            )
+        ).toList()
+    }
+
+    fun getRecruitmentApplicants(
+        token: String,
+        recruitmentId: Int
+    ): List<RecruitmentApplicantItem> = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    "recruitments/$recruitmentId/applications",
+                    token = token
+                ),
+                Array<RecruitmentApplicantItem>::class.java
+            )
+        ).toList()
+    }
+
+    fun cancelRecruitmentApplication(
+        token: String,
+        applicationId: Int
+    ): RecruitmentActionResult = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitment-applications/$applicationId/cancel",
+                    body = emptyMap<String, String>(),
+                    token = token
+                ),
+                RecruitmentActionResult::class.java
+            )
+        )
+    }
+
+    fun decideRecruitmentApplication(
+        token: String,
+        applicationId: Int,
+        status: String
+    ): RecruitmentActionResult = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitment-applications/$applicationId/status",
+                    body = mapOf("status" to status),
+                    token = token,
+                    method = "PATCH"
+                ),
+                RecruitmentActionResult::class.java
+            )
+        )
+    }
+
+    fun completeRecruitmentApplication(
+        token: String,
+        applicationId: Int
+    ): RecruitmentActionResult = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitment-applications/$applicationId/complete",
+                    body = emptyMap<String, String>(),
+                    token = token
+                ),
+                RecruitmentActionResult::class.java
+            )
+        )
+    }
+
+    fun closeRecruitment(
+        token: String,
+        recruitmentId: Int
+    ): RecruitmentActionResult = parse {
+        requireNotNull(
+            gson.fromJson(
+                request(
+                    path = "recruitments/$recruitmentId/close",
+                    body = emptyMap<String, String>(),
+                    token = token
+                ),
+                RecruitmentActionResult::class.java
+            )
+        )
+    }
     private fun get(path: String): String = request(path)
 
     private fun request(path: String, body: Any? = null, token: String? = null,
@@ -290,6 +471,26 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             client.newCall(builder.build()).execute().use { response ->
                 val status = response.code
                 if (status !in 200..299) {
+                    if (
+                        path.startsWith("recruitments") ||
+                        path.startsWith("recruitment-applications")
+                    ) {
+                        val serverMessage = runCatching {
+                            gson.fromJson(
+                                response.body.string(),
+                                com.google.gson.JsonObject::class.java
+                            )?.get("error")?.asString
+                        }.getOrNull()
+
+                        val message = if (status == 401) {
+                            "로그인이 만료되었습니다. 다시 로그인해주세요."
+                        } else {
+                            serverMessage?.takeIf { it.isNotBlank() }
+                                ?: "모집 요청에 실패했습니다. 다시 시도해주세요."
+                        }
+
+                        throw SurveyApiException(message, status)
+                    }
                     if (path.startsWith("payments/")) {
                         val paymentCode = runCatching {
                             gson.fromJson(response.body.string(), com.google.gson.JsonObject::class.java)

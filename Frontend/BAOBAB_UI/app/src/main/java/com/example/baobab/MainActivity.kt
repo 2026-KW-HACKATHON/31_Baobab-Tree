@@ -221,6 +221,9 @@ class MainActivity : ComponentActivity() {
                                             viewModel.navigate(BaobabScreen.LOGIN)
                                         }
                                     },
+                                    onRecruitmentClick = {
+                                        viewModel.navigate(BaobabScreen.RECRUITMENTS)
+                                    },
                                     onMyClick = {
                                         viewModel.navigate(BaobabScreen.MY)
                                     }
@@ -498,7 +501,19 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-
+                        BaobabScreen.RECRUITMENTS -> {
+                            LocalNetworkPermissionGate {
+                                key(account.token) {
+                                    RecruitmentHubScreen(
+                                        token = account.token,
+                                        onBack = { viewModel.goBack() },
+                                        onLogin = {
+                                            viewModel.navigate(BaobabScreen.LOGIN)
+                                        }
+                                    )
+                                }
+                            }
+                        }
                         BaobabScreen.EDIT -> {
                             val survey = requireNotNull(viewModel.editingSurvey)
                             SurveyEditScreen(

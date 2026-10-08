@@ -28,6 +28,8 @@ model User {
   pointHistories PointHistory[]
   paymentOrders PaymentOrder[]
   coupons Coupon[]
+  recruitments            Recruitment[]            @relation("CreatedRecruitments")
+  recruitmentApplications RecruitmentApplication[]
 
   @@map("USER")
 }
@@ -117,6 +119,9 @@ model PointHistory {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   paymentOrder PaymentOrder? @relation(fields: [paymentOrderId], references: [id], onDelete: Restrict)
 
+  recruitmentApplicationId Int? @unique
+  recruitmentApplication RecruitmentApplication? @relation(fields: [recruitmentApplicationId], references: [id], onDelete: Restrict)
+
   @@map("POINT_HISTORY")
 }
 
@@ -159,4 +164,72 @@ model Coupon {
   @@unique([userId, requestKey])
   @@index([userId, createdAt])
   @@map("COUPON")
+}
+
+model Recruitment {
+  id              Int      @id @default(autoincrement())
+  authorId        Int
+  title           String
+  organization    String
+  activityType    String
+  participationMode String
+  description     String
+  eligibility     String
+  location        String
+  durationMinutes Int
+  targetCount     Int
+  acceptedCount   Int      @default(0)
+  rewardPoint     Int      @default(0)
+  fundedReward    Int      @default(0)
+  remainingReward Int      @default(0)
+  applicationDeadline DateTime
+  status          String   @default("OPEN")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author       User                     @relation("CreatedRecruitments", fields: [authorId], references: [id], onDelete: Restrict)
+  slots        RecruitmentSlot[]
+  applications RecruitmentApplication[]
+
+  @@index([status, applicationDeadline])
+  @@index([authorId, createdAt])
+  @@map("RECRUITMENT")
+}
+
+model RecruitmentSlot {
+  id            Int      @id @default(autoincrement())
+  recruitmentId Int
+  startsAt      DateTime
+  endsAt        DateTime
+
+  recruitment Recruitment              @relation(fields: [recruitmentId], references: [id], onDelete: Restrict)
+  applications RecruitmentApplication[]
+
+  @@index([recruitmentId, startsAt])
+  @@map("RECRUITMENT_SLOT")
+}
+
+model RecruitmentApplication {
+  id            Int       @id @default(autoincrement())
+  recruitmentId Int
+  userId        Int
+  slotId        Int
+  message       String?
+  status        String    @default("APPLIED")
+  agreedAt      DateTime
+  selectedAt    DateTime?
+  completedAt   DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  recruitment Recruitment     @relation(fields: [recruitmentId], references: [id], onDelete: Restrict)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  slot        RecruitmentSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  pointHistory PointHistory?
+
+  @@unique([recruitmentId, userId])
+  @@index([userId, createdAt])
+  @@index([recruitmentId, status])
+  @@map("RECRUITMENT_APPLICATION")
 }

@@ -89,7 +89,8 @@ fun HomeScreen(
     error: String? = null,
     onRetry: () -> Unit = {},
     currentPoint: Int? = null,
-    loggedIn: Boolean = false
+    loggedIn: Boolean = false,
+    onRecruitmentClick: () -> Unit = {}
 ) {
     var selectedCategory by rememberSaveable { mutableStateOf("전체") }
     val visibleSurveys = if (selectedCategory == "전체") {
@@ -106,6 +107,12 @@ fun HomeScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             HomeHeader(onMyClick = onMyClick, onPointClick = onPointClick, currentPoint = currentPoint, loggedIn = loggedIn)
+            androidx.compose.material3.TextButton(
+                onClick = onRecruitmentClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("참여자 모집", color = Color(0xFF2F5539))
+            }
             HomeCategoryBar(
                 selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it }

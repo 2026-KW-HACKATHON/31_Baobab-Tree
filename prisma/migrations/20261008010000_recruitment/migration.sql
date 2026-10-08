@@ -1,0 +1,98 @@
+BEGIN;
+
+-- AlterTable
+ALTER TABLE "POINT_HISTORY" ADD COLUMN     "recruitmentApplicationId" INTEGER;
+
+-- CreateTable
+CREATE TABLE "RECRUITMENT" (
+    "id" SERIAL NOT NULL,
+    "authorId" INTEGER NOT NULL,
+    "title" TEXT NOT NULL,
+    "organization" TEXT NOT NULL,
+    "activityType" TEXT NOT NULL,
+    "participationMode" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "eligibility" TEXT NOT NULL,
+    "location" TEXT NOT NULL,
+    "durationMinutes" INTEGER NOT NULL,
+    "targetCount" INTEGER NOT NULL,
+    "acceptedCount" INTEGER NOT NULL DEFAULT 0,
+    "rewardPoint" INTEGER NOT NULL DEFAULT 0,
+    "fundedReward" INTEGER NOT NULL DEFAULT 0,
+    "remainingReward" INTEGER NOT NULL DEFAULT 0,
+    "applicationDeadline" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RECRUITMENT_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RECRUITMENT_SLOT" (
+    "id" SERIAL NOT NULL,
+    "recruitmentId" INTEGER NOT NULL,
+    "startsAt" TIMESTAMP(3) NOT NULL,
+    "endsAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RECRUITMENT_SLOT_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RECRUITMENT_APPLICATION" (
+    "id" SERIAL NOT NULL,
+    "recruitmentId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "slotId" INTEGER NOT NULL,
+    "message" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'APPLIED',
+    "agreedAt" TIMESTAMP(3) NOT NULL,
+    "selectedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "paidAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RECRUITMENT_APPLICATION_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "RECRUITMENT_status_applicationDeadline_idx" ON "RECRUITMENT"("status", "applicationDeadline");
+
+-- CreateIndex
+CREATE INDEX "RECRUITMENT_authorId_createdAt_idx" ON "RECRUITMENT"("authorId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "RECRUITMENT_SLOT_recruitmentId_startsAt_idx" ON "RECRUITMENT_SLOT"("recruitmentId", "startsAt");
+
+-- CreateIndex
+CREATE INDEX "RECRUITMENT_APPLICATION_userId_createdAt_idx" ON "RECRUITMENT_APPLICATION"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "RECRUITMENT_APPLICATION_recruitmentId_status_idx" ON "RECRUITMENT_APPLICATION"("recruitmentId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RECRUITMENT_APPLICATION_recruitmentId_userId_key" ON "RECRUITMENT_APPLICATION"("recruitmentId", "userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "POINT_HISTORY_recruitmentApplicationId_key" ON "POINT_HISTORY"("recruitmentApplicationId");
+
+-- AddForeignKey
+ALTER TABLE "POINT_HISTORY" ADD CONSTRAINT "POINT_HISTORY_recruitmentApplicationId_fkey" FOREIGN KEY ("recruitmentApplicationId") REFERENCES "RECRUITMENT_APPLICATION"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RECRUITMENT" ADD CONSTRAINT "RECRUITMENT_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "USER"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RECRUITMENT_SLOT" ADD CONSTRAINT "RECRUITMENT_SLOT_recruitmentId_fkey" FOREIGN KEY ("recruitmentId") REFERENCES "RECRUITMENT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RECRUITMENT_APPLICATION" ADD CONSTRAINT "RECRUITMENT_APPLICATION_recruitmentId_fkey" FOREIGN KEY ("recruitmentId") REFERENCES "RECRUITMENT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RECRUITMENT_APPLICATION" ADD CONSTRAINT "RECRUITMENT_APPLICATION_userId_fkey" FOREIGN KEY ("userId") REFERENCES "USER"("user_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RECRUITMENT_APPLICATION" ADD CONSTRAINT "RECRUITMENT_APPLICATION_slotId_fkey" FOREIGN KEY ("slotId") REFERENCES "RECRUITMENT_SLOT"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+COMMIT;
