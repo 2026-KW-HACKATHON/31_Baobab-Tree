@@ -1,0 +1,22 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { createApp } = require('../src/app');
+test('location check works without Kakao or database queries', async t => {
+  const app = createApp({prisma:{}});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const url=`http://127.0.0.1:${server.address().port}/api/location/check`;
+  const send=(latitude,longitude,accuracyMeters=5)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude,longitude,accuracyMeters,measuredAtMillis:Date.now()})});
+  let response=await send(37.619,127.058);
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal((await response.json()).eligible,true);
+  response=await send(37.421998,-122.084);
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).eligible,false);
+  response=await send(37.619,127.058,101);
+  assert.equal(response.status,400);
+  response=await send(37.61556823410261,127.06800697390771);
+  assert.equal(response.status,422);
+});
