@@ -359,6 +359,83 @@ test('schema-backed API integration', async t => {
     assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, 500);
   });
 
+  await t.test('QR redemption previews without consuming and uses a coupon exactly once', async () => {
+    const coupon = await prisma.coupon.findFirst({ where: { userId: author.id } });
+    const url = `/coupons/${coupon.id}/redeem`;
+    const page = await fetch(base + url);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-type'), /text\/html/);
+    assert.equal(page.headers.get('cache-control'), 'no-store');
+    assert.match(await page.text(), /사용 처리 중/);
+    assert.equal((await prisma.coupon.findUnique({ where: { id: coupon.id } })).status, 'AVAILABLE');
+    const results = await Promise.all([request('POST', url, {}), request('POST', url, {})]);
+    assert.ok(results.every(result => result.status === 200));
+    assert.equal(results.filter(result => !result.data.alreadyUsed).length, 1);
+    const used = await prisma.coupon.findUnique({ where: { id: coupon.id } });
+    assert.equal(used.status, 'USED');
+    assert.ok(used.usedAt instanceof Date);
+    const replay = await request('POST', url, {});
+    assert.equal(replay.data.alreadyUsed, true);
+    assert.equal(replay.data.coupon.usedAt, used.usedAt.toISOString());
+    assert.equal(replay.data.coupon.userId, undefined);
+    assert.equal(replay.data.coupon.requestKey, undefined);
+    assert.match(await (await fetch(base + url)).text(), /이미 사용한 쿠폰/);
+    const wallet = await request('GET', '/users/me/coupons', undefined, token);
+    assert.equal(wallet.data.find(item => item.id === coupon.id).status, 'USED');
+    assert.equal((await prisma.user.findUnique({ where: { id: author.id } })).point, 500);
+    assert.equal((await request('POST', '/coupons/not-a-coupon/redeem', {})).status, 404);
+    assert.equal((await request('POST', `/coupons/${require('node:crypto').randomUUID()}/redeem`, {})).status, 404);
+    assert.equal((await fetch(base + url, { method: 'POST', body: '' })).status, 415);
+  });
+
+  await t.test('opening the QR page automatically redeems without a button click', async () => {
+    const coupon = await prisma.coupon.create({ data: {
+      userId: author.id, itemId: 'test-auto', shop: 'Test shop', title: 'Automatic coupon',
+      cost: 0, requestKey: require('node:crypto').randomUUID(),
+    } });
+    const url = `/coupons/${coupon.id}/redeem`;
+    async function openPage() {
+      const html = await (await fetch(base + url)).text();
+      const button = { disabled: /id="redeem" disabled/.test(html), addEventListener() {} };
+      const status = {};
+      let requests = 0;
+      const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+      await require('node:vm').runInNewContext(script + '\nredemptionRequest', {
+        document: { getElementById: id => id === 'redeem' ? button : status },
+        window: { location: { pathname: '/api' + url } },
+        fetch: (pathname, options) => {
+          requests++;
+          assert.equal(options.method, 'POST');
+          return fetch(base.replace(/\/api$/, '') + pathname, options);
+        },
+      });
+      return { requests, button, status };
+    }
+    const first = await openPage();
+    assert.equal(first.requests, 1);
+    assert.equal(first.status.textContent, '쿠폰 사용이 완료됐습니다.');
+    assert.equal(first.button.disabled, true);
+    const used = await prisma.coupon.findUnique({ where: { id: coupon.id } });
+    assert.equal(used.status, 'USED');
+    assert.ok(used.usedAt);
+    assert.equal((await openPage()).requests, 0);
+    assert.equal((await prisma.coupon.findUnique({ where: { id: coupon.id } })).usedAt.toISOString(), used.usedAt.toISOString());
+  });
+
+  await t.test('unavailable coupons cannot be redeemed and preview escapes product text', async () => {
+    const coupon = await prisma.coupon.create({ data: {
+      userId: author.id, itemId: 'test-unavailable', shop: '<script>alert(1)</script>',
+      title: '<img src=x onerror=alert(1)>', cost: 0, status: 'EXPIRED',
+      requestKey: require('node:crypto').randomUUID(),
+    } });
+    const url = `/coupons/${coupon.id}/redeem`;
+    const html = await (await fetch(base + url)).text();
+    assert.match(html, /&lt;script&gt;/);
+    assert.ok(!html.includes('<img src=x'));
+    assert.equal((await request('POST', url, {})).status, 409);
+    assert.equal((await prisma.coupon.findUnique({ where: { id: coupon.id } })).usedAt, null);
+  });
+
   await t.test('Toss checkout uses public callbacks and approved orders credit exactly once', async () => {
     const names = ['TOSS_CLIENT_KEY', 'TOSS_SECRET_KEY', 'PAYMENT_PUBLIC_BASE_URL'];
     const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));

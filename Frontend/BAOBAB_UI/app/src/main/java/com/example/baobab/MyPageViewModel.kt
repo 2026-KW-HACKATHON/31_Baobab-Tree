@@ -233,7 +233,7 @@ class MyPageViewModel(
     fun exchangeCoupon(
         token: String,
         itemId: String,
-        success: () -> Unit
+        success: (WalletCoupon) -> Unit
     ) {
         if (closed || loading || exchangingCoupon) return
 
@@ -283,7 +283,7 @@ class MyPageViewModel(
                                             it.id != result.coupon.id
                                         }
 
-                                success()
+                                success(result.coupon)
                             },
                             onFailure = {
                                 sessionExpired =

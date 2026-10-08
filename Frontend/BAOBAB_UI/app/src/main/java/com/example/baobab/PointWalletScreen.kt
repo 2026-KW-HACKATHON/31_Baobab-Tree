@@ -56,14 +56,14 @@ private val ExchangeItemIds = listOf(
 )
 
 @Composable
-fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, coupons: List<WalletCoupon>, exchangeBusy: Boolean, exchangeError: String?, onExchange: (String, () -> Unit) -> Unit, paymentBusy: Boolean, paymentError: String?, onCharge: (String, Int) -> Unit, onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit, onHistoryClick: () -> Unit = {}) {
+fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: String?, coupons: List<WalletCoupon>, exchangeBusy: Boolean, exchangeError: String?, onExchange: (String, (WalletCoupon) -> Unit) -> Unit, paymentBusy: Boolean, paymentError: String?, onCharge: (String, Int) -> Unit, onRetry: () -> Unit, onBack: () -> Unit, onLogin: () -> Unit, onHistoryClick: () -> Unit = {}) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var selectedAmount by rememberSaveable { mutableIntStateOf(1000) }
     var selectedProvider by rememberSaveable { mutableStateOf("KAKAOPAY") }
     var category by rememberSaveable { mutableStateOf("전체") }
     var exchanging by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirming by rememberSaveable { mutableStateOf(false) }
-    var notice by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCouponId by rememberSaveable { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding()) {
         Box(Modifier.fillMaxWidth().height(64.dp)) {
             IconButton(onBack, Modifier.align(Alignment.CenterStart).padding(start = 8.dp)) {
@@ -227,10 +227,7 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
 
                             OutlinedButton(
                                 onClick = {
-                                    notice =
-                                        "${coupon.title}\n" +
-                                                "쿠폰 번호: ${coupon.id}\n" +
-                                                "현재 상품은 테스트 예시이며 실제 매장에서 사용할 수 없습니다."
+                                    selectedCouponId = coupon.id
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -442,10 +439,10 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
                             !paymentBusy,
                     onClick = {
                         if (enough) {
-                            onExchange(ExchangeItemIds[index]) {
+                            onExchange(ExchangeItemIds[index]) { coupon ->
                                 exchanging = null
                                 tab = 1
-                                notice = "쿠폰 교환이 완료됐습니다."
+                                selectedCouponId = coupon.id
                             }
                         } else {
                             exchanging = null
@@ -470,9 +467,12 @@ fun PointWalletScreen(point: Int?, loggedIn: Boolean, loading: Boolean, error: S
             }
         )
     }
-    notice?.let { message -> AlertDialog(onDismissRequest = { notice = null },
-        title = { Text("안내") }, text = { Text(message) },
-        confirmButton = { TextButton(onClick = { notice = null }) { Text("확인") } }) }
+    coupons.firstOrNull { it.id == selectedCouponId }?.let { coupon ->
+        CouponQrDialog(coupon = coupon, onDismiss = {
+            selectedCouponId = null
+            onRetry()
+        })
+    }
 }
 @Composable
 private fun PaymentProviderButton(
