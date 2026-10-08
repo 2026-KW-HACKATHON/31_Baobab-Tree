@@ -478,6 +478,23 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
             client.newCall(builder.build()).execute().use { response ->
                 val status = response.code
                 if (status !in 200..299) {
+                    if (path.matches(Regex("surveys/[0-9]+/share"))) {
+                        val serverError = runCatching {
+                            gson.fromJson(response.body.string(), com.google.gson.JsonObject::class.java)
+                                ?.get("error")?.asString
+                        }.getOrNull()
+                        val message = when {
+                            status == 401 -> "로그인이 만료되었습니다. 다시 로그인한 뒤 공유해주세요."
+                            status == 400 && serverError == "Survey is closed or full" ->
+                                "설문이 마감되었거나 참여 인원이 차서 공유 링크를 만들 수 없습니다."
+                            status == 400 && serverError == "Invalid ID" -> "설문 정보를 다시 불러온 뒤 공유해주세요."
+                            status == 404 && serverError == "Survey not found" -> "삭제된 설문은 공유할 수 없습니다."
+                            status == 404 -> "서버에 공유 기능이 아직 반영되지 않았습니다. 잠시 후 다시 시도해주세요."
+                            status >= 500 -> "서버에서 공유 링크를 만들지 못했습니다. 잠시 후 다시 시도해주세요."
+                            else -> "공유 링크 생성에 실패했습니다. 설문을 다시 열고 시도해주세요."
+                        }
+                        throw SurveyApiException(message, status)
+                    }
                     if (
                         path.startsWith("recruitments") ||
                         path.startsWith("recruitment-applications")

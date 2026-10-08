@@ -297,8 +297,6 @@ class SurveyService {
     const targetSurveyId = id(surveyId);
     const survey = await this.prisma.survey.findUnique({ where: { id: targetSurveyId } });
     if (!survey) fail(404, 'Survey not found');
-    if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date()) ||
-        (survey.targetCount > 0 && survey.currentCount >= survey.targetCount)) fail(400, 'Survey is closed or full');
     if (!await this.prisma.user.findUnique({ where: { id: referrerId } })) fail(401, 'User not found');
     const shareToken = jwt.sign({ purpose: 'survey-referral', referrerId, surveyId: targetSurveyId }, JWT_SECRET,
       { algorithm: 'HS256', expiresIn: '30d', audience: 'baobab-survey-referral' });

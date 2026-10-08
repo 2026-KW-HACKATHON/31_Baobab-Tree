@@ -324,6 +324,23 @@ class SurveyRepositoryTest {
         assertFalse(com.google.gson.Gson().fromJson(requestedBody, com.google.gson.JsonObject::class.java).has("referralToken"))
     }
 
+    @Test fun shareFailuresDescribeTheActualCauseInsteadOfAskingForInput() {
+        for ((code, serverError, expected) in listOf(
+            Triple(400, "Survey is closed or full", "설문이 마감되었거나 참여 인원이 차서 공유 링크를 만들 수 없습니다."),
+            Triple(400, "Invalid ID", "설문 정보를 다시 불러온 뒤 공유해주세요."),
+            Triple(401, "Bearer token required", "로그인이 만료되었습니다. 다시 로그인한 뒤 공유해주세요."),
+            Triple(404, "Survey not found", "삭제된 설문은 공유할 수 없습니다."),
+            Triple(404, "Endpoint not found", "서버에 공유 기능이 아직 반영되지 않았습니다. 잠시 후 다시 시도해주세요."),
+            Triple(500, "Internal server error", "서버에서 공유 링크를 만들지 못했습니다. 잠시 후 다시 시도해주세요.")
+        )) {
+            status = code
+            body = """{"error":"$serverError"}"""
+            val error = assertThrows(SurveyApiException::class.java) { repository.createShareLink("7", "token") }
+            assertEquals(code, error.status)
+            assertEquals(expected, error.message)
+        }
+    }
+
     private fun draft() = CompletedSurveyDraft(
         SurveyDraftStepOne("Travel", "Life", "", "", "2099. 01. 01."),
         listOf(SurveyQuestionSnapshot(SurveyQuestionType.MULTIPLE_CHOICE, "Bus?", true, 0, listOf("Yes", "No"))),

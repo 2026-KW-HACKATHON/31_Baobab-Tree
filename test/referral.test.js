@@ -122,9 +122,9 @@ test('survey share referrals credit the sharer only after a valid response', asy
     assert.equal(await prisma.response.count({ where: { userId: fresh.id, surveyId: survey.id } }), 0);
     assert.equal((await prisma.survey.findUnique({ where: { id: survey.id } })).currentCount, beforeCount);
   });
-  await t.test('closed surveys neither issue links nor award referral rewards', async () => {
+  await t.test('closed surveys can still be shared but cannot award referral rewards', async () => {
     await prisma.survey.update({ where: { id: survey.id }, data: { status: 'CLOSED' } });
-    assert.equal((await request('POST', `/surveys/${survey.id}/share`, {}, sharer.token)).status, 400);
+    assert.equal((await request('POST', `/surveys/${survey.id}/share`, {}, sharer.token)).status, 200);
     assert.equal((await submit(await user('closed'), referral)).status, 400);
     assert.equal(await balance(), 20);
   });
