@@ -4,6 +4,7 @@ const { randomBytes, createHash } = require('node:crypto');
 const { SurveyService } = require('../services/survey.service');
 const { RecruitmentService } = require('../services/recruitment.service');
 const auth = require('../middlewares/auth.middleware');
+const { createCouponRedemptionRouter } = require('./coupon-redemption.routes');
 
 const allowedAmounts = [1000, 3000, 5000];
 
@@ -149,6 +150,7 @@ async function kakaoRequest(action, body) {
 function createSurveyRouter(service = new SurveyService()) {
   const router = express.Router();
   const prisma = service.prisma;
+  router.use('/coupons', createCouponRedemptionRouter(prisma));
   const recruitmentService = new RecruitmentService(prisma);
 
   const handle = (status, action) => async (req, res, next) => {
