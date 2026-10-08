@@ -211,13 +211,13 @@ class MyPageViewModel(
         }
     }
 
-    fun saveProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String,
+    fun saveProfile(token: String, name: String, email: String, newPassword: String, ageGroup: String, currentPassword: String,
                     success: () -> Unit) {
         if (savingProfile || closed) return
         val request = generation
         savingProfile = true; profileError = null
         worker.submit {
-            val response = runCatching { repository.updateProfile(token, name, email, region, ageGroup, currentPassword) }
+            val response = runCatching { repository.updateProfile(token, name, email, newPassword, ageGroup, currentPassword) }
             ui.execute {
                 if (!closed && request == generation) {
                     savingProfile = false

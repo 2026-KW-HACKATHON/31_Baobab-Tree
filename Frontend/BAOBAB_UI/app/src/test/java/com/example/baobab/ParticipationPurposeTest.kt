@@ -4,13 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ParticipationPurposeTest {
-    @Test fun legacyCategoriesUsePurposeWithoutChangingImages() {
+    @Test fun legacyCategoriesUseCurrentPurposeAndImages() {
         assertEquals("학술·연구", participationPurpose("교육·학습"))
         assertEquals("가게·서비스", participationPurpose("경제·상권"))
         assertEquals("지역·정책", participationPurpose("지역·사회"))
         assertEquals("기타", participationPurpose("생활·편의"))
         assertEquals("기타", participationPurpose("unknown"))
-        assertEquals(R.drawable.search_card_02, surveyCategoryImage("학술·연구"))
+        assertEquals(R.drawable.survey_category_research, surveyCategoryImage("학술·연구"))
     }
 
     @Test fun explicitRecruitmentPurposeSurvivesReloadAndFeedKeepsDetailIdentity() {

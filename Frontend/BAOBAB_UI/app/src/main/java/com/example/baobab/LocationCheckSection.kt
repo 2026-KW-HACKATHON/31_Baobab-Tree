@@ -104,6 +104,9 @@ fun LocationCheckSection(
 
     val verified = initiallyVerified || result?.eligible == true
 
+    // Hide the entire signup verification card after choosing to verify later.
+    if (skipped && verificationToken == null) return
+
     Surface(
         modifier = Modifier.fillMaxWidth(), color = Color.White,
         shape = RoundedCornerShape(12.dp),

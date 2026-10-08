@@ -37,7 +37,7 @@ fun sharedSurvey(link: String?): SharedSurvey? = runCatching {
 
 fun sharedSurveyId(link: String?): String? = sharedSurvey(link)?.id
 
-fun shareSurvey(context: Context, survey: SurveyItem, link: String) {
+fun shareSurvey(context: Context, survey: SurveyItem, link: String = surveyShareLink(survey.id)) {
     val share = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, survey.title)

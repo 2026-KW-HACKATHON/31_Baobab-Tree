@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -73,8 +74,8 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
     if (editingProfile && token != null) model.profile?.let { user ->
         ProfileEditDialog(user, model.savingProfile, model.profileError,
             onDismiss = { editingProfile = false; profilePassword = ""; model.clearProfileError() },
-            onSave = { name, email, region, ageGroup ->
-                model.saveProfile(token, name, email, region, ageGroup, profilePassword) {
+            onSave = { name, email, newPassword, ageGroup ->
+                model.saveProfile(token, name, email, newPassword, ageGroup, profilePassword) {
                     editingProfile = false; profilePassword = ""; onProfileUpdated()
                 }
             })
@@ -107,8 +108,9 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
             }
             else -> SurveyRequestContent(model.loading, model.error, model.profile,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
+                val regionVerified = user.verifiedRegionCode == "1135056000" && user.regionVerifiedAt != null
                 LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item {
+                    if (!regionVerified) item {
                         LocationCheckSection(
                             enabled = !model.savingProfile,
                             onBusyChanged = {},
@@ -121,7 +123,23 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                     item {
                         Surface(onClick = onPointClick, color = MyGreen, shape = RoundedCornerShape(24.dp)) {
                             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("${user.name}님", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("${user.name}님", modifier = Modifier.weight(1f),
+                                        color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                    if (regionVerified) {
+                                        Surface(color = Color(0xFFE4EEDC), shape = RoundedCornerShape(50)) {
+                                            Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Icon(Icons.Outlined.CheckCircle, contentDescription = null,
+                                                    tint = MyGreen, modifier = Modifier.size(15.dp))
+                                                Text("월계1동 인증", color = MyGreen, fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
                                 Text("@${user.loginId}", color = Color(0xFFDCE7D8), fontSize = 14.sp)
                                 Spacer(Modifier.height(12.dp))
                                 Text("보유 포인트", color = Color(0xFFDCE7D8), fontSize = 13.sp)
@@ -144,13 +162,10 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                                 BaobabActionButton(BaobabActionIcons.Edit, "프로필 수정",
                                     { model.clearProfileError(); profilePassword = ""; confirmingPassword = true })
                             }
-                            user.memberType?.let { type ->
+                            user.memberType?.takeUnless { it == "WOLGYE_RESIDENT" }?.let { type ->
                                 Text(if (type == "OTHER") "기타 · ${user.memberDetail.orEmpty()}" else MemberTypes[type].orEmpty(), color = MyGreen)
                             }
                             Text(user.email, color = MyMuted, fontSize = 14.sp)
-                            val profileRegion = if (user.verifiedRegionCode == "1135056000" && user.regionVerifiedAt != null)
-                                "월계1동" else user.region
-                            if (!profileRegion.isNullOrBlank()) Text("지역 · $profileRegion", color = MyMuted, fontSize = 14.sp)
                             if (!user.ageGroup.isNullOrBlank()) Text(user.ageGroup, color = MyMuted, fontSize = 14.sp)
                         }
                     }

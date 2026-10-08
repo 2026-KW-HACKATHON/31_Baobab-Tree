@@ -121,12 +121,15 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         )
     }
 
-    fun updateProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String): UserProfile = parse {
+    fun updateProfile(token: String, name: String, email: String, newPassword: String, ageGroup: String, currentPassword: String): UserProfile = parse {
         if (name.isBlank()) throw SurveyApiException("이름을 입력해주세요.")
         if (!Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim()))
             throw SurveyApiException("이메일 형식을 확인해주세요.")
-        val payload = mapOf("currentPassword" to currentPassword, "name" to name.trim(), "email" to email.trim(),
-            "region" to region.trim().ifEmpty { null }, "ageGroup" to ageGroup.trim().ifEmpty { null })
+        if (newPassword.isNotEmpty() && (newPassword.trim().length < 8 || newPassword.toByteArray(Charsets.UTF_8).size > 72))
+            throw SurveyApiException("새 비밀번호는 8자 이상, UTF-8 기준 72바이트 이하로 입력해주세요.")
+        val payload = mutableMapOf<String, Any?>("currentPassword" to currentPassword,
+            "name" to name.trim(), "email" to email.trim(), "ageGroup" to ageGroup.trim().ifEmpty { null })
+        if (newPassword.isNotEmpty()) payload["newPassword"] = newPassword
         gson.fromJson(request("users/me", payload, token, method = "PATCH"), UserProfile::class.java)
             .also { require(it.id > 0 && it.name.isNotBlank()) }
     }

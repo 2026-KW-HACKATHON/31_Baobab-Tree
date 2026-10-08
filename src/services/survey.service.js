@@ -154,10 +154,10 @@ class SurveyService {
 
   async updateUserMe(userId, data) {
     await this.getUserMe(userId);
-    const fields = ['name', 'email', 'ageGroup', 'region', 'currentPassword'];
+    const fields = ['name', 'email', 'ageGroup', 'region', 'currentPassword', 'newPassword'];
     if (!data || typeof data !== 'object' || Array.isArray(data) ||
         !Object.keys(data).length || Object.keys(data).some(key => !fields.includes(key))) {
-      fail(400, 'Only name, email, ageGroup and region can be updated');
+      fail(400, 'Only name, email, ageGroup, region and newPassword can be updated');
     }
     await this.verifyPassword(userId, data.currentPassword);
     const changes = {};
@@ -168,6 +168,13 @@ class SurveyService {
     }
     for (const key of ['ageGroup', 'region']) {
       if (data[key] !== undefined) changes[key] = data[key] === null ? null : text(data[key], key);
+    }
+    if (data.newPassword !== undefined) {
+      if (typeof data.newPassword !== 'string' || data.newPassword.trim().length < 8 ||
+          Buffer.byteLength(data.newPassword, 'utf8') > 72) {
+        fail(400, '새 비밀번호는 8자 이상, UTF-8 기준 72바이트 이하로 입력해주세요.');
+      }
+      changes.password = await bcrypt.hash(data.newPassword, 10);
     }
     return this.prisma.user.update({ where: { id: id(userId) }, data: changes, select: userSelect });
   }
