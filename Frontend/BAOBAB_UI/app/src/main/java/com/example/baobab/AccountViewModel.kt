@@ -40,6 +40,7 @@ fun surveyPayload(draft: CompletedSurveyDraft): Map<String, Any?> {
         "description" to draft.basicInfo.introduction.trim().ifEmpty { null },
         "audience" to draft.basicInfo.audience.trim().ifEmpty { null },
         "duration" to draft.settings.duration.trim().ifEmpty { null }, "imageData" to draft.settings.imageData,
+        "requiresRegionVerification" to draft.settings.requiresRegionVerification,
         "rewardPoint" to number(draft.settings.rewardPerPerson, "P"),
         "targetCount" to number(draft.settings.rewardRecipients, "명"), "endDate" to date, "questions" to questions)
 }
@@ -111,8 +112,8 @@ class AccountViewModel(
         })
     }
 
-    fun signup(name: String, email: String, id: String, password: String, memberType: String, memberDetail: String, success: () -> Unit) = runRequest({
-        repository.signup(name, email, id, password, memberType, memberDetail)
+    fun signup(name: String, email: String, id: String, password: String, memberType: String, memberDetail: String, success: () -> Unit, location: DeviceCoordinates? = null) = runRequest({
+        repository.signup(name, email, id, password, memberType, memberDetail, location)
     }, { success() })
 
     fun create(draft: CompletedSurveyDraft, success: () -> Unit) {
@@ -151,7 +152,15 @@ class AccountViewModel(
 
     fun checkParticipation(survey: SurveyItem, success: () -> Unit) {
         val credential = token ?: return
-        runRequest({ repository.hasParticipated(survey.id, credential) }, {
+        runRequest({
+            if (survey.requiresRegionVerification) {
+                val profile = repository.getProfile(credential)
+                if (profile.regionVerifiedAt == null || profile.verifiedRegionCode != "1135056000") {
+                    throw SurveyApiException("월계1동 지역 인증이 필요한 설문입니다. 마이페이지에서 지역 인증을 완료해주세요.")
+                }
+            }
+            repository.hasParticipated(survey.id, credential)
+        }, {
             if (it) participationNotice = "이미 참여한 설문입니다."
             else success()
         }, { participationNotice = it })

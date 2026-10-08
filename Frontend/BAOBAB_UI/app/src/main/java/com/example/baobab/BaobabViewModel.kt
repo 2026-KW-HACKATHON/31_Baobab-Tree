@@ -28,6 +28,7 @@ class SurveyCreationState {
     var rewardPerPerson by mutableStateOf("100P")
     var rewardRecipients by mutableStateOf("10명")
     var selectedDuration by mutableStateOf("5분 이하")
+    var requiresRegionVerification by mutableStateOf(false)
     var imageData by mutableStateOf<String?>(null)
 }
 
@@ -131,16 +132,16 @@ class BaobabViewModel(private val savedState: SavedStateHandle = SavedStateHandl
     }
 
     fun snapshotDraft(settings: SurveySettingsDraft): CompletedSurveyDraft = CompletedSurveyDraft(
-            basicInfo = with(creationState) {
-                SurveyDraftStepOne(title, category, introduction, audience, deadline)
-            },
-            questions = creationState.questions.map {
-                SurveyQuestionSnapshot(
-                    it.type, it.title, it.required, it.selectedOptionIndex, it.options.toList()
-                )
-            },
-            settings = settings.copy(imageData = creationState.imageData)
-        )
+        basicInfo = with(creationState) {
+            SurveyDraftStepOne(title, category, introduction, audience, deadline)
+        },
+        questions = creationState.questions.map {
+            SurveyQuestionSnapshot(
+                it.type, it.title, it.required, it.selectedOptionIndex, it.options.toList()
+            )
+        },
+        settings = settings.copy(imageData = creationState.imageData)
+    )
     fun completeCreation(settings: SurveySettingsDraft) = completeCreation(snapshotDraft(settings))
 
     fun completeCreation(draft: CompletedSurveyDraft) {

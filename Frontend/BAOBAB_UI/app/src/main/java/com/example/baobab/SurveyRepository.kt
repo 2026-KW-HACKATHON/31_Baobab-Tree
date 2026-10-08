@@ -36,12 +36,29 @@ interface SurveyRepository {
 
 class SurveyApiException(message: String, val status: Int? = null) : IOException(message)
 
+data class LocationRegion(
+    val province: String,
+    val city: String,
+    val district: String,
+    val code: String
+)
+
+data class LocationCheckResult(
+    val eligible: Boolean,
+    val region: LocationRegion,
+    val message: String
+)
+
 class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
     private val base = URI(baseUrl.trimEnd('/') + "/").also {
-        require(it.scheme in listOf("http", "https") && it.host != null && it.query == null && it.fragment == null) {
+        require(
+            it.scheme in listOf("http", "https") &&
+                    it.host != null && it.query == null && it.fragment == null
+        ) {
             "surveyApiBaseUrl must be an HTTP(S) API URL"
         }
     }
+
     private val gson = GsonBuilder().serializeNulls().create()
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -50,6 +67,30 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)
         .build()
+
+    fun checkLocation(point: DeviceCoordinates): LocationCheckResult {
+        val payload = mapOf(
+            "latitude" to point.latitude,
+            "longitude" to point.longitude,
+            "accuracyMeters" to point.accuracyMeters,
+            "measuredAtMillis" to point.measuredAtMillis
+        )
+        val response = gson.fromJson(
+            request("location/check", body = payload, method = "POST"),
+            LocationCheckResult::class.java
+        ) ?: throw SurveyApiException("지역 확인 응답이 비어 있습니다.")
+        if (response.region == null || response.message.isNullOrBlank()) {
+            throw SurveyApiException("지역 확인 응답을 확인하지 못했습니다.")
+        }
+        return response
+    }
+
+    fun verifyRegion(point: DeviceCoordinates, token: String): UserProfile {
+        return gson.fromJson(
+            request("users/me/region-verification", body = point, token = token, method = "POST"),
+            UserProfile::class.java
+        ) ?: throw SurveyApiException("지역 인증 저장 결과를 받지 못했습니다.")
+    }
 
     fun deleteSurvey(id: String, token: String) {
         require(id.toIntOrNull()?.let { it > 0 } == true)
@@ -114,9 +155,9 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
         response.get("accessToken").asString.also { require(it.isNotBlank()) }
     }
 
-    fun signup(name: String, email: String, loginId: String, password: String, memberType: String, memberDetail: String) {
+    fun signup(name: String, email: String, loginId: String, password: String, memberType: String, memberDetail: String, location: DeviceCoordinates? = null) {
         request("auth/signup", mapOf("name" to name.trim(), "email" to email.trim(), "loginId" to loginId.trim(),
-            "password" to password, "memberType" to memberType, "memberDetail" to memberDetail.trim().ifEmpty { null }))
+            "password" to password, "memberType" to memberType, "memberDetail" to memberDetail.trim().ifEmpty { null }, "location" to location))
     }
 
     fun verifyPassword(token: String, password: String) {
@@ -469,7 +510,7 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
     private fun get(path: String): String = request(path)
 
     private fun request(path: String, body: Any? = null, token: String? = null,
-        method: String = if (body == null) "GET" else "POST"): String {
+                        method: String = if (body == null) "GET" else "POST"): String {
         try {
             val payload = body?.let { gson.toJson(it).toRequestBody("application/json; charset=utf-8".toMediaType()) }
             val builder = Request.Builder().url(base.resolve(path).toString()).header("Accept", "application/json")
@@ -495,6 +536,24 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                         }
                         throw SurveyApiException(message, status)
                     }
+                    if (status == 403 && path.endsWith("/responses")) {
+                        val message = runCatching {
+                            gson.fromJson(response.body.string(), com.google.gson.JsonObject::class.java)?.get("error")?.asString
+                        }.getOrNull()
+                        throw SurveyApiException(message ?: "설문 참여 권한을 확인해주세요.", status)
+                    }
+                    if (path == "location/check" || path == "users/me/region-verification" || (path == "auth/signup" && status in listOf(400, 403))) {
+                        val serverMessage = runCatching {
+                            gson.fromJson(response.body.string(), com.google.gson.JsonObject::class.java)
+                                ?.get("error")?.asString
+                        }.getOrNull()
+                        throw SurveyApiException(
+                            serverMessage?.takeIf { it.isNotBlank() }
+                                ?: "지역 확인에 실패했습니다. 다시 시도해주세요.",
+                            status
+                        )
+                    }
+
                     if (
                         path.startsWith("recruitments") ||
                         path.startsWith("recruitment-applications")
@@ -556,7 +615,7 @@ class HttpSurveyRepository(baseUrl: String) : SurveyRepository {
                     }, status)
                 }
                 return response.body.string()
-                }
+            }
         } catch (error: SurveyApiException) {
             throw error
         } catch (error: IOException) {
@@ -590,6 +649,7 @@ private data class QuestionDto(
     }
 }
 private data class SurveyDto(
+    val requiresRegionVerification: Boolean = false,
     val id: Int? = null, val title: String? = null, val category: String? = null,
     val userId: Int? = null, val targetCount: Int? = null,
     val description: String? = null, val audience: String? = null, val duration: String? = null, val imageData: String? = null,
@@ -612,13 +672,14 @@ private data class SurveyDto(
             },
             questionCount = questionItems.size, questions = questionItems,
             userId = userId, targetCount = targetCount,
-            description = description, audience = audience, duration = duration, imageData = imageData
+            description = description, audience = audience, duration = duration, imageData = imageData,
+            requiresRegionVerification = requiresRegionVerification
         )
     }
 }
 
 private data class ParticipationDto(val id: Int, val createdAt: String, val survey: HistorySurveyDto,
-    val answers: List<HistoryAnswerDto>)
+                                    val answers: List<HistoryAnswerDto>)
 private data class HistorySurveyDto(val id: Int, val title: String, val category: String?, val rewardPoint: Int)
 private data class HistoryAnswerDto(val answer: String, val question: HistoryQuestionDto)
 private data class HistoryQuestionDto(val question: String)

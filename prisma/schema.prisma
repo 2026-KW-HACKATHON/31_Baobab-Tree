@@ -45,6 +45,7 @@ model Survey {
   audience     String?
   duration     String?
   imageData    String?
+  requiresRegionVerification Boolean @default(false) @map("requires_region_verification")
   fundedReward Int       @default(0)
   rewardPoint  Int        @default(0) @map("reward_point")
   targetCount  Int        @default(0) @map("target_count")

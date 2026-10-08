@@ -10,16 +10,17 @@ import java.util.concurrent.Executors
 import java.util.UUID
 
 data class UserProfile(val id: Int, val name: String, val email: String, val loginId: String, val point: Int,
-    val ageGroup: String? = null, val region: String? = null, val memberType: String? = null, val memberDetail: String? = null)
+                       val ageGroup: String? = null, val region: String? = null, val memberType: String? = null, val memberDetail: String? = null,
+                       val regionVerifiedAt: String? = null, val verifiedRegionCode: String? = null)
 data class AnswerResult(val option: String, val count: Int, val percentage: Int)
 data class QuestionResults(val questionId: Int, val results: List<AnswerResult>, val responseCount: Int? = null)
 data class SurveyResults(val surveyId: Int, val totalResponses: Int, val questions: List<QuestionResults>,
-    val responses: List<SurveyResponseResult>? = null)
+                         val responses: List<SurveyResponseResult>? = null)
 data class SurveyResponseResult(val responseId: Int, val createdAt: String, val answers: List<ResponseAnswerResult>)
 data class ResponseAnswerResult(val questionId: Int, val question: String, val answer: String?)
 data class AnswerHistory(val question: String, val answer: String)
 data class ParticipationHistory(val id: Int, val surveyId: String, val title: String, val category: String,
-    val rewardPoint: Int, val createdAt: String, val answers: List<AnswerHistory>)
+                                val rewardPoint: Int, val createdAt: String, val answers: List<AnswerHistory>)
 
 class MyPageViewModel(
     private val repository: HttpSurveyRepository = HttpSurveyRepository(BuildConfig.SURVEY_API_BASE_URL),
@@ -211,7 +212,7 @@ class MyPageViewModel(
     }
 
     fun saveProfile(token: String, name: String, email: String, region: String, ageGroup: String, currentPassword: String,
-        success: () -> Unit) {
+                    success: () -> Unit) {
         if (savingProfile || closed) return
         val request = generation
         savingProfile = true; profileError = null

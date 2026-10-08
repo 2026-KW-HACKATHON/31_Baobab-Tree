@@ -54,6 +54,10 @@ function surveyData(data, partial = false) {
     endDate: data.endDate !== undefined ? data.endDate : data.end_date,
   };
   const result = {};
+  if (data.requiresRegionVerification !== undefined) {
+    if (typeof data.requiresRegionVerification !== 'boolean') fail(400, 'requiresRegionVerification must be boolean');
+    result.requiresRegionVerification = data.requiresRegionVerification;
+  }
   if (!partial || data.title !== undefined) result.title = text(data.title, 'title');
   if (data.category !== undefined) result.category = data.category === null ? null : text(data.category, 'category');
   for (const field of ['rewardPoint', 'targetCount']) {
@@ -333,6 +337,13 @@ class SurveyService {
     return transaction(this.prisma, async tx => {
       const survey = await tx.survey.findUnique({ where: { id: targetSurveyId }, include: surveyInclude });
       if (!survey) fail(404, 'Survey not found');
+      if (survey.requiresRegionVerification) {
+        const participant = await tx.user.findUnique({ where: { id: participantId },
+          select: { regionVerifiedAt: true, verifiedRegionCode: true } });
+        if (!participant?.regionVerifiedAt || participant.verifiedRegionCode !== '1135056000') {
+          fail(403, '월계1동 지역 인증이 필요한 설문입니다. 마이페이지에서 지역 인증을 완료해주세요.');
+        }
+      }
       if (survey.status !== 'OPEN' || (survey.endDate && survey.endDate <= new Date())) fail(400, 'Survey is closed');
       const existing = await tx.response.findUnique({ where: { userId_surveyId: { userId: participantId, surveyId: targetSurveyId } } });
       if (existing) fail(409, 'Already participated');

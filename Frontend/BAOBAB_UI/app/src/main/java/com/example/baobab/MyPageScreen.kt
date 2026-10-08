@@ -106,6 +106,24 @@ fun MyPageScreen(model: MyPageViewModel, token: String?, onBack: () -> Unit,
                 { model.load(token) }, Modifier.weight(1f).fillMaxWidth()) { user ->
                 LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item {
+                        if (user.verifiedRegionCode == "1135056000" && user.regionVerifiedAt != null) {
+                            Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                    Text("월계1동 지역 인증 완료", color = MyGreen, fontWeight = FontWeight.Bold)
+                                    Text("현재 위치 인증 기록이 계정에 저장되어 있습니다.", color = MyMuted)
+                                }
+                            }
+                        } else {
+                            LocationCheckSection(
+                                enabled = !model.savingProfile,
+                                onBusyChanged = {},
+                                verificationToken = token,
+                                onSaved = { model.load(token) }
+                            )
+                        }
+                    }
+
+                    item {
                         Surface(onClick = onPointClick, color = MyGreen, shape = RoundedCornerShape(24.dp)) {
                             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${user.name}님", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -278,7 +296,7 @@ private fun MyMetric(label: String, value: String, modifier: Modifier) {
 
 @Composable
 internal fun ResultsContent(survey: SurveyItem, results: SurveyResults, onDelete: (SurveyItem) -> Unit,
-    onShare: (SurveyItem) -> Unit, onEdit: (SurveyItem) -> Unit) {
+                            onShare: (SurveyItem) -> Unit, onEdit: (SurveyItem) -> Unit) {
     var byResponse by rememberSaveable(survey.id) { mutableStateOf(false) }
     var expandedQuestions by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }
     var expandedResponses by rememberSaveable(survey.id) { mutableStateOf(listOf<Int>()) }

@@ -24,6 +24,7 @@ fun surveyEditState(survey: SurveyItem) = SurveyCreationState().apply {
     audience = survey.audience.orEmpty(); deadline = survey.deadline.orEmpty()
     rewardPerPerson = survey.points.ifBlank { "0P" }; rewardRecipients = "${survey.targetCount ?: 0}명"
     selectedDuration = survey.duration.orEmpty(); imageData = survey.imageData
+    requiresRegionVerification = survey.requiresRegionVerification
     questions.clear()
     questions.addAll(survey.questions.map { q -> SurveyQuestionDraft(
         if (q.questionType == "single") SurveyQuestionType.MULTIPLE_CHOICE else SurveyQuestionType.SHORT_ANSWER,
@@ -32,7 +33,7 @@ fun surveyEditState(survey: SurveyItem) = SurveyCreationState().apply {
 
 @Composable
 fun SurveyEditScreen(survey: SurveyItem, state: SurveyCreationState, busy: Boolean, error: String?,
-    onBack: () -> Unit, onSave: (CompletedSurveyDraft, String) -> Unit) {
+                     onBack: () -> Unit, onSave: (CompletedSurveyDraft, String) -> Unit) {
     var step by rememberSaveable(survey.id) { mutableIntStateOf(1) }
     var status by rememberSaveable(survey.id) { mutableStateOf(survey.status) }
     val canEditQuestions = (survey.participantCount ?: 0) == 0

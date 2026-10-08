@@ -36,7 +36,8 @@ data class SurveyItem(
     val targetCount: Int? = null,
     val imageData: String? = null,
     val participationLabel: String = "온라인 설문",
-    val recruitmentId: Int? = null
+    val recruitmentId: Int? = null,
+    val requiresRegionVerification: Boolean = false
 )
 
 data class SurveyQuestion(
