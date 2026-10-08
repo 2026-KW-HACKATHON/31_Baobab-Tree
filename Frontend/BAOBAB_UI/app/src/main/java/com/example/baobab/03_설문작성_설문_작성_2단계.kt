@@ -96,8 +96,32 @@ fun SurveyCreationStepTwoScreen(onBackClick: () -> Unit = {},
                     }
                 }
             }
-            OutlinedButton(onClick = { questions.add(SurveyQuestionDraft(SurveyQuestionType.SHORT_ANSWER)) },
-                modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Add, null); Text("문항 추가") }
+            //OutlinedButton(onClick = { questions.add(SurveyQuestionDraft(SurveyQuestionType.SHORT_ANSWER)) },
+                //modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.Add, null); Text("문항 추가") }
+            OutlinedButton(
+                onClick = {
+                    questions.add(
+                        SurveyQuestionDraft(SurveyQuestionType.SHORT_ANSWER)
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF2F5539)
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color(0xFFD9E0D5)
+                )
+            ) {
+                Icon(Icons.Outlined.Add, contentDescription = null)
+                Text(
+                    text = "문항 추가",
+                    fontWeight = FontWeight.Bold
+                )
+            }
             if (!valid) Text("질문 내용을 입력하고 객관식 선택지는 서로 다르게 작성해주세요.", color = Color(0xFF697369), fontSize = 13.sp)
         }
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

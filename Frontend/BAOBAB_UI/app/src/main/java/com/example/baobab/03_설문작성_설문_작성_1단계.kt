@@ -102,16 +102,24 @@ fun SurveyCreationStepOneScreen(
             ) {
                 SurveyFieldSection(
                     number = 1,
-                    label = "설문 주제",
+                    label = "설문 제목",
                     value = title,
-                    placeholder = "설문 주제를 입력하세요. (필수)",
+                    placeholder = "설문 제목을 입력하세요. (필수)",
                     onValueChange = { title = it }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Column {
                     SurveySelectionField("2. 카테고리 (필수)", category.ifBlank { "카테고리를 선택해주세요" },
                         Icons.Outlined.ExpandMore, { selectingCategory = !selectingCategory })
-                    androidx.compose.animation.AnimatedVisibility(visible = selectingCategory) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = selectingCategory,
+                        enter = androidx.compose.animation.expandVertically(
+                            expandFrom = androidx.compose.ui.Alignment.Top
+                        ),
+                        exit = androidx.compose.animation.shrinkVertically(
+                            shrinkTowards = androidx.compose.ui.Alignment.Top
+                        )
+                    ) {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 6.dp)
                             .background(SurveyFormField, RoundedCornerShape(10.dp))
                             .border(1.dp, SurveyFormBorder, RoundedCornerShape(10.dp))) {

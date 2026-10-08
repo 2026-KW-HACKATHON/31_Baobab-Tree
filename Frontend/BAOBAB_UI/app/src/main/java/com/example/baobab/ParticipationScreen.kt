@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronLeft
 
 data class ParticipationResult(val responseId: Int, val rewardPoint: Int, val point: Int)
 
@@ -48,7 +50,16 @@ fun ParticipationScreen(survey: SurveyItem, answers: Map<Int, String>, busy: Boo
     needsLogin: Boolean, onLogin: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(0xFFFDF9F1)).safeDrawingPadding().imePadding()
         .verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        TextButton(onBack, enabled = !busy) { Text("뒤로") }
+        IconButton(
+            onClick = onBack,
+            enabled = !busy
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ChevronLeft,
+                contentDescription = "뒤로가기",
+                tint = Color(0xFF2F5539)
+            )
+        }
         Text(survey.title, style = MaterialTheme.typography.headlineSmall)
         Text("필수 질문에 답해주세요. 선택 질문은 건너뛸 수 있어요.")
         survey.questions.forEachIndexed { index, question ->
